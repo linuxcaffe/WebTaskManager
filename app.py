@@ -50,7 +50,7 @@ def static_files(filename):
 @app.route('/api/tasks')
 def get_tasks():
     """Get all pending tasks in JSON format"""
-    result = run_task_command('task export status:pending')
+    result = run_task_command('task status:PENDING export')
     
     if result['success']:
         try:
