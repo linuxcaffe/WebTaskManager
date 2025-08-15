@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskWarrior Web UI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>TaskWarrior Web UI</h1>
+            <button id="refresh-btn" class="btn btn-primary">
+                <span class="icon">🔄</span>
+                Refresh
+            </button>
+        </header>
+
+        <div class="add-task-section">
+            <h2>Add New Task</h2>
+            <form id="add-task-form">
+                <div class="form-group">
+                    <input type="text" id="task-description" placeholder="Task description" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <input type="text" id="task-tags" placeholder="Tags (comma-separated)">
+                    </div>
+                    <div class="form-group">
+                        <select id="task-priority">
+                            <option value="">Priority</option>
+                            <option value="H">High</option>
+                            <option value="M">Medium</option>
+                            <option value="L">Low</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="task-due">Due Date:</label>
+                        <input type="datetime-local" id="task-due">
+                    </div>
+                    <div class="form-group">
+                        <label for="task-scheduled">Scheduled:</label>
+                        <input type="datetime-local" id="task-scheduled">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success">Add Task</button>
+            </form>
+        </div>
+
+        <div class="tasks-section">
+            <h2>Pending Tasks</h2>
+            <div id="loading" class="loading">Loading tasks...</div>
+            <div id="error-message" class="error-message" style="display: none;"></div>
+            <div id="tasks-container"></div>
+        </div>
+    </div>
+
+    <!-- Edit Task Modal -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Task</h3>
+                <span class="close">&times;</span>
+            </div>
+            <form id="edit-task-form">
+                <div class="form-group">
+                    <label for="edit-description">Description:</label>
+                    <input type="text" id="edit-description" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-tags">Tags:</label>
+                    <input type="text" id="edit-tags" placeholder="Comma-separated tags">
+                </div>
+                <div class="form-group">
+                    <label for="edit-priority">Priority:</label>
+                    <select id="edit-priority">
+                        <option value="">None</option>
+                        <option value="H">High</option>
+                        <option value="M">Medium</option>
+                        <option value="L">Low</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-due">Due Date:</label>
+                    <input type="datetime-local" id="edit-due">
+                </div>
+                <div class="form-group">
+                    <label for="edit-scheduled">Scheduled:</label>
+                    <input type="datetime-local" id="edit-scheduled">
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-edit">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>

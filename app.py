@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""
+TaskWarrior Web UI - Backend Server
+A lightweight Flask server to interface with TaskWarrior commands
+"""
+
+from flask import Flask, jsonify, request, send_from_directory
+from flask_cors import CORS
+import subprocess
+import json
+import os
+import re
+from datetime import datetime
+
+app = Flask(__name__, static_folder='.', static_url_path='')
+CORS(app)
+
+def run_task_command(command):
+    """Execute a TaskWarrior command and return the result"""
+    try:
+        # Ensure we're using the task command
+        if not command.startswith('task'):
+            command = f'task {command}'
+        
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        return {
+            'success': result.returncode == 0,
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'returncode': result.returncode
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'stdout': '',
+            'stderr': str(e),
+            'returncode': -1
+        }
+
+@app.route('/')
+def index():
+    """Serve the main HTML page"""
+    return send_from_directory('.', 'index.html')
+
+@app.route('/<path:filename>')
+def static_files(filename):
+    """Serve static files (CSS, JS, etc.)"""
+    return send_from_directory('.', filename)
+
+@app.route('/api/tasks')
+def get_tasks():
+    """Get all pending tasks in JSON format"""
+    result = run_task_command('task export status:pending')
+    
+    if result['success']:
+        try:
+            tasks = json.loads(result['stdout']) if result['stdout'].strip() else []
+            return jsonify({
+                'success': True,
+                'tasks': tasks
+            })
+        except json.JSONDecodeError:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to parse task data'
+            }), 500
+    else:
+        return jsonify({
+            'success': False,
+            'error': result['stderr']
+        }), 500
+
+@app.route('/api/task/<int:task_id>/start', methods=['POST'])
+def start_task(task_id):
+    """Start a task"""
+    result = run_task_command(f'task {task_id} start')
+    return jsonify({
+        'success': result['success'],
+        'message': result['stdout'] if result['success'] else result['stderr']
+    })
+
+@app.route('/api/task/<int:task_id>/stop', methods=['POST'])
+def stop_task(task_id):
+    """Stop a task"""
+    result = run_task_command(f'task {task_id} stop')
+    return jsonify({
+        'success': result['success'],
+        'message': result['stdout'] if result['success'] else result['stderr']
+    })
+
+@app.route('/api/task/<int:task_id>/done', methods=['POST'])
+def complete_task(task_id):
+    """Mark a task as done"""
+    result = run_task_command(f'task {task_id} done')
+    return jsonify({
+        'success': result['success'],
+        'message': result['stdout'] if result['success'] else result['stderr']
+    })
+
+@app.route('/api/task/<int:task_id>/delete', methods=['DELETE'])
+def delete_task(task_id):
+    """Delete a task"""
+    result = run_task_command(f'task {task_id} delete')
+    return jsonify({
+        'success': result['success'],
+        'message': result['stdout'] if result['success'] else result['stderr']
+    })
+
+@app.route('/api/task/<int:task_id>/modify', methods=['PUT'])
+def modify_task(task_id):
+    """Modify a task"""
+    data = request.get_json()
+    
+    modifications = []
+    
+    if 'description' in data:
+        modifications.append(f'description:"{data["description"]}"')
+    
+    if 'tags' in data:
+        # Remove existing tags and add new ones
+        if isinstance(data['tags'], list):
+            tag_str = ' '.join([f'+{tag}' for tag in data['tags']])
+            modifications.append(tag_str)
+    
+    if 'due' in data:
+        modifications.append(f'due:{data["due"]}')
+    
+    if 'scheduled' in data:
+        modifications.append(f'scheduled:{data["scheduled"]}')
+    
+    if 'priority' in data:
+        modifications.append(f'priority:{data["priority"]}')
+    
+    if modifications:
+        mod_string = ' '.join(modifications)
+        result = run_task_command(f'task {task_id} modify {mod_string}')
+        return jsonify({
+            'success': result['success'],
+            'message': result['stdout'] if result['success'] else result['stderr']
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'error': 'No modifications provided'
+        }), 400
+
+@app.route('/api/task/add', methods=['POST'])
+def add_task():
+    """Add a new task"""
+    data = request.get_json()
+    
+    if not data.get('description'):
+        return jsonify({
+            'success': False,
+            'error': 'Description is required'
+        }), 400
+    
+    command_parts = [f'add "{data["description"]}"']
+    
+    if data.get('tags'):
+        if isinstance(data['tags'], list):
+            for tag in data['tags']:
+                command_parts.append(f'+{tag}')
+    
+    if data.get('due'):
+        command_parts.append(f'due:{data["due"]}')
+    
+    if data.get('scheduled'):
+        command_parts.append(f'scheduled:{data["scheduled"]}')
+    
+    if data.get('priority'):
+        command_parts.append(f'priority:{data["priority"]}')
+    
+    command = f'task {" ".join(command_parts)}'
+    result = run_task_command(command)
+    
+    return jsonify({
+        'success': result['success'],
+        'message': result['stdout'] if result['success'] else result['stderr']
+    })
+
+if __name__ == '__main__':
+    # Check if TaskWarrior is installed
+    check_result = run_task_command('task version')
+    if not check_result['success']:
+        print("Warning: TaskWarrior doesn't seem to be installed or accessible")
+        print("Please install TaskWarrior: sudo apt-get install taskwarrior")
+    else:
+        print("TaskWarrior found:", check_result['stdout'].split('\n')[0])
+    
+    print("Starting TaskWarrior Web UI...")
+    print("Access the interface at: http://localhost:5000")
+    app.run(host='0.0.0.0', port=5000, debug=True)
