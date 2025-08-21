@@ -100,7 +100,7 @@ def complete_task(task_id):
 @app.route('/api/task/<int:task_id>/delete', methods=['DELETE'])
 def delete_task(task_id):
     """Delete a task"""
-    result = run_task_command(f'task {task_id} delete')
+    result = run_task_command(f'task rc.confirmation=off {task_id} delete')
     return jsonify({
         'success': result['success'],
         'message': result['stdout'] if result['success'] else result['stderr']
@@ -113,36 +113,53 @@ def modify_task(task_id):
     
     modifications = []
     
-    if 'description' in data:
+    if 'description' in data and data['description']:
         modifications.append(f'description:"{data["description"]}"')
     
     if 'tags' in data:
-        # Remove existing tags and add new ones
-        if isinstance(data['tags'], list):
-            tag_str = ' '.join([f'+{tag}' for tag in data['tags']])
-            modifications.append(tag_str)
+        # First clear all existing tags, then add new ones
+        if isinstance(data['tags'], list) and data['tags']:
+            # Clear existing tags first
+            clear_result = run_task_command(f'task rc.confirmation=off {task_id} modify -TAGS')
+            if clear_result['success']:
+                # Add new tags
+                tag_str = ' '.join([f'+{tag}' for tag in data['tags'] if tag.strip()])
+                if tag_str:
+                    modifications.append(tag_str)
+        else:
+            # Clear all tags if empty list provided
+            clear_result = run_task_command(f'task rc.confirmation=off {task_id} modify -TAGS')
     
     if 'due' in data:
-        modifications.append(f'due:{data["due"]}')
+        if data['due']:
+            modifications.append(f'due:"{data["due"]}"')
+        else:
+            modifications.append('due:')
     
     if 'scheduled' in data:
-        modifications.append(f'scheduled:{data["scheduled"]}')
+        if data['scheduled']:
+            modifications.append(f'scheduled:"{data["scheduled"]}"')
+        else:
+            modifications.append('scheduled:')
     
     if 'priority' in data:
-        modifications.append(f'priority:{data["priority"]}')
+        if data['priority']:
+            modifications.append(f'priority:{data["priority"]}')
+        else:
+            modifications.append('priority:')
     
     if modifications:
         mod_string = ' '.join(modifications)
-        result = run_task_command(f'task {task_id} modify {mod_string}')
+        result = run_task_command(f'task rc.confirmation=off {task_id} modify {mod_string}')
         return jsonify({
             'success': result['success'],
             'message': result['stdout'] if result['success'] else result['stderr']
         })
     else:
         return jsonify({
-            'success': False,
-            'error': 'No modifications provided'
-        }), 400
+            'success': True,
+            'message': 'No changes to apply'
+        })
 
 @app.route('/api/task/add', methods=['POST'])
 def add_task():
