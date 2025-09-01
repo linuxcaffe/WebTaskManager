@@ -310,9 +310,13 @@ class TaskWarriorUI {
     }
 
     formatDateForTask(dateString) {
-        // Convert HTML datetime-local format to TaskWarrior format
-        const date = new Date(dateString);
-        return date.toISOString().slice(0, 19).replace('T', ' ');
+        // Convert HTML datetime-local input to local date string without timezone
+        // Input format: 'YYYY-MM-DDTHH:MM' (local time)
+        // Output format: 'YYYY-MM-DDTHH:MM:00' (local time, no timezone)
+        if (!dateString) return '';
+        
+        // Return the input string with seconds added if needed
+        return dateString.length === 16 ? `${dateString}:00` : dateString;
     }
 
     formatDateForInput(dateString) {
