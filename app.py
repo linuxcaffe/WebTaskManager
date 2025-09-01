@@ -11,6 +11,13 @@ import json
 import os
 import re
 from datetime import datetime
+from config import DEVELOPER_MODE, DEBUG_FILE
+
+def log_command(command):
+    """Log the command to the debug file with a timestamp"""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with open(DEBUG_FILE, 'a') as f:
+        f.write(f"[{timestamp}] {command}\n")
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
@@ -22,6 +29,17 @@ def run_task_command(command):
         if not command.startswith('task'):
             command = f'task {command}'
         
+        if DEVELOPER_MODE:
+            # In developer mode, log the command instead of executing it
+            log_command(command)
+            return {
+                'success': True,
+                'stdout': f'[DEV MODE] Command logged to {DEBUG_FILE}: {command}',
+                'stderr': '',
+                'returncode': 0
+            }
+        
+        # Normal execution when not in developer mode
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         return {
             'success': result.returncode == 0,
