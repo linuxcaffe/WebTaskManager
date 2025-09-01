@@ -71,6 +71,7 @@ class TaskWarriorUI {
     async addTask() {
         const description = document.getElementById('task-description').value.trim();
         const tags = document.getElementById('task-tags').value.trim();
+        const project = document.getElementById('task-project').value.trim();
         const priority = document.getElementById('task-priority').value;
         const due = document.getElementById('task-due').value;
         const scheduled = document.getElementById('task-scheduled').value;
@@ -83,6 +84,7 @@ class TaskWarriorUI {
         const taskData = {
             description: description,
             tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
+            project: project || null,
             priority: priority || null,
             due: due ? this.formatDateForTask(due) : null,
             scheduled: scheduled ? this.formatDateForTask(scheduled) : null
@@ -281,6 +283,7 @@ class TaskWarriorUI {
 
     clearAddForm() {
         document.getElementById('add-task-form').reset();
+        document.getElementById('task-project').value = '';
     }
 
     showLoading(show) {

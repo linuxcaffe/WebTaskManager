@@ -208,6 +208,9 @@ def add_task():
     if data.get('priority'):
         command_parts.append(f'priority:{data["priority"]}')
     
+    if data.get('project'):
+        command_parts.append(f'project:{data["project"]}')
+    
     command = f'task {" ".join(command_parts)}'
     result = run_task_command(command)
     
