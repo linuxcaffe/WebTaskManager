@@ -55,6 +55,8 @@ def get_tasks():
     if result['success']:
         try:
             tasks = json.loads(result['stdout']) if result['stdout'].strip() else []
+            # Sort tasks by urgency in descending order
+            tasks.sort(key=lambda x: x.get('urgency', 0), reverse=True)
             return jsonify({
                 'success': True,
                 'tasks': tasks
