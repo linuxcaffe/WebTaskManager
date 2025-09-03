@@ -213,6 +213,9 @@ def add_task():
     if data.get('project'):
         command_parts.append(f'project:{data["project"]}')
     
+    if data.get('duration'):
+        command_parts.append(f'estTime:{data["duration"]}')
+    
     command = f'task {" ".join(command_parts)}'
     result = run_task_command(command)
     

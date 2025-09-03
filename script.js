@@ -75,6 +75,7 @@ class TaskWarriorUI {
         const priority = document.getElementById('task-priority').value;
         const due = document.getElementById('task-due').value;
         const scheduled = document.getElementById('task-scheduled').value;
+        const duration = document.getElementById('task-duration').value.trim();
 
         if (!description) {
             this.showNotification('Description is required', 'error');
@@ -87,7 +88,8 @@ class TaskWarriorUI {
             project: project || null,
             priority: priority || null,
             due: due ? this.formatDateForTask(due) : null,
-            scheduled: scheduled ? this.formatDateForTask(scheduled) : null
+            scheduled: scheduled ? this.formatDateForTask(scheduled) : null,
+            duration: duration || null
         };
 
         try {
