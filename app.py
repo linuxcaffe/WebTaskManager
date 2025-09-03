@@ -29,9 +29,11 @@ def run_task_command(command):
         if not command.startswith('task'):
             command = f'task {command}'
         
+        # Always log the command for debugging purposes
+        log_command(command)
+        
         if DEVELOPER_MODE:
-            # In developer mode, log the command instead of executing it
-            log_command(command)
+            # In developer mode, just log the command without executing it
             return {
                 'success': True,
                 'stdout': f'[DEV MODE] Command logged to {DEBUG_FILE}: {command}',
