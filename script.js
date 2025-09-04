@@ -147,6 +147,7 @@ class TaskWarriorUI {
         document.getElementById('edit-description').value = task.description || '';
         document.getElementById('edit-tags').value = task.tags ? task.tags.join(', ') : '';
         document.getElementById('edit-priority').value = task.priority || '';
+        document.getElementById('edit-project').value = task.project || '';
         
         // Format dates for datetime-local input
         if (task.due) {
@@ -160,6 +161,9 @@ class TaskWarriorUI {
         } else {
             document.getElementById('edit-scheduled').value = '';
         }
+        
+        document.getElementById('edit-duration').value = task.estTime  || '';
+        
 
         document.getElementById('edit-modal').style.display = 'block';
     }
@@ -174,16 +178,20 @@ class TaskWarriorUI {
 
         const description = document.getElementById('edit-description').value.trim();
         const tags = document.getElementById('edit-tags').value.trim();
+        const project = document.getElementById('edit-project').value.trim();
         const priority = document.getElementById('edit-priority').value;
         const due = document.getElementById('edit-due').value;
         const scheduled = document.getElementById('edit-scheduled').value;
+        const duration = document.getElementById('edit-duration').value.trim();
 
         const taskData = {
             description: description,
             tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
+            project: project || null,
             priority: priority || null,
             due: due ? this.formatDateForTask(due) : null,
-            scheduled: scheduled ? this.formatDateForTask(scheduled) : null
+            scheduled: scheduled ? this.formatDateForTask(scheduled) : null,
+            est: duration || null
         };
 
         try {

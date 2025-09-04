@@ -169,6 +169,15 @@ def modify_task(task_id):
             modifications.append(f'priority:{data["priority"]}')
         else:
             modifications.append('priority:')
+            
+    if 'project' in data:
+        if data['project']:
+            modifications.append(f'project:{data["project"]}')
+        else:
+            modifications.append('project:')
+            
+    if 'est' in data and data['est']:
+        modifications.append(f'estTime:{data["est"]}')
     
     if modifications:
         mod_string = ' '.join(modifications)
