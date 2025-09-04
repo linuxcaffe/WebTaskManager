@@ -18,15 +18,57 @@ body {
     padding: 20px;
 }
 
+.header-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
 header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 30px;
     padding: 20px;
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.context-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.context-label {
+    font-weight: 500;
+    color: #34495e;
+}
+
+.context-options {
+    display: flex;
+    gap: 8px;
+}
+
+.context-option {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.context-option:hover {
+    background: #e9ecef;
+}
+
+.context-option.active {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
 }
 
 h1 {

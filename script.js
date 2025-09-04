@@ -4,46 +4,21 @@ class TaskWarriorUI {
     constructor() {
         this.tasks = [];
         this.currentEditingTask = null;
-        this.init();
-    }
-
-    init() {
-        this.bindEvents();
+        this.currentContext = ''; // 'pro', 'perso', or '' for all
+        this.initializeEventListeners();
         this.loadTasks();
     }
 
-    bindEvents() {
-        // Refresh button
-        document.getElementById('refresh-btn').addEventListener('click', () => {
-            this.loadTasks();
-        });
-
-        // Add task form
-        document.getElementById('add-task-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.addTask();
-        });
-
-        // Edit task form
-        document.getElementById('edit-task-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.saveTaskEdit();
-        });
-
-        // Modal close events
-        document.querySelector('.close').addEventListener('click', () => {
-            this.closeModal();
-        });
-
-        document.getElementById('cancel-edit').addEventListener('click', () => {
-            this.closeModal();
-        });
-
-        // Close modal when clicking outside
-        document.getElementById('edit-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'edit-modal') {
-                this.closeModal();
-            }
+    initializeEventListeners() {
+        document.getElementById('add-task-form').addEventListener('submit', (e) => this.handleAddTask(e));
+        document.getElementById('edit-task-form').addEventListener('submit', (e) => this.handleEditTask(e));
+        document.getElementById('cancel-edit').addEventListener('click', () => this.closeModal());
+        document.querySelector('.close').addEventListener('click', () => this.closeModal());
+        document.getElementById('refresh-btn').addEventListener('click', () => this.loadTasks());
+        
+        // Add context selection event listeners
+        document.querySelectorAll('.context-option').forEach(button => {
+            button.addEventListener('click', (e) => this.setContext(e.target.getAttribute('data-context')));
         });
     }
 
@@ -217,15 +192,42 @@ class TaskWarriorUI {
         }
     }
 
+    // Filter tasks based on current context
+    getFilteredTasks() {
+        if (!this.currentContext) return this.tasks;
+        return this.tasks.filter(task => {
+            return task.tags && task.tags.includes(this.currentContext);
+        });
+    }
+
+    // Set the current context and update the UI
+    setContext(context) {
+        this.currentContext = context;
+        
+        // Update active state of context buttons
+        document.querySelectorAll('.context-option').forEach(button => {
+            if (button.getAttribute('data-context') === context) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        });
+        
+        // Re-render tasks with the new filter
+        this.renderTasks();
+    }
+
     renderTasks() {
         const container = document.getElementById('tasks-container');
+        if (!container) return;
         
-        if (this.tasks.length === 0) {
-            container.innerHTML = '<div class="loading">No pending tasks found</div>';
+        const filteredTasks = this.getFilteredTasks();
+        if (filteredTasks.length === 0) {
+            container.innerHTML = '<div class="loading">No tasks found' + (this.currentContext ? ` in context "${this.currentContext}"` : '') + '</div>';
             return;
         }
 
-        container.innerHTML = this.tasks.map(task => this.renderTask(task)).join('');
+        container.innerHTML = filteredTasks.map(task => this.renderTask(task)).join('');
     }
 
     renderTask(task) {

@@ -9,7 +9,17 @@
 <body>
     <div class="container">
         <header>
-            <h1>TaskWarrior Web UI</h1>
+            <div class="header-content">
+                <h1>TaskWarrior Web UI</h1>
+                <div class="context-selector">
+                    <span class="context-label">Context:</span>
+                    <div class="context-options">
+                        <button type="button" class="context-option" data-context="">All</button>
+                        <button type="button" class="context-option" data-context="pro">Pro</button>
+                        <button type="button" class="context-option" data-context="perso">Perso</button>
+                    </div>
+                </div>
+            </div>
             <button id="refresh-btn" class="btn btn-primary">
                 <span class="icon">🔄</span>
                 Refresh
