@@ -9,8 +9,12 @@ class TaskWarriorUI {
             project: null,
             tags: []
         };
+        this.projects = new Set(); // Pour stocker la liste des projets uniques
         this.initializeEventListeners();
         this.loadTasks();
+        
+        // Mettre à jour les suggestions de projets
+        this.updateProjectSuggestions();
     }
 
     initializeEventListeners() {
@@ -30,8 +34,17 @@ class TaskWarriorUI {
         document.getElementById('clear-filters').addEventListener('click', () => this.clearFilters());
         
         // Apply filters on Enter key in filter inputs
-        ['filter-project', 'filter-tags'].forEach(id => {
-            document.getElementById(id).addEventListener('keypress', (e) => {
+        const projectInput = document.getElementById('filter-project');
+        const tagsInput = document.getElementById('filter-tags');
+        
+        // Update project suggestions as user types
+        projectInput.addEventListener('input', (e) => {
+            this.updateProjectSuggestions(e.target.value);
+        });
+        
+        // Apply filters on Enter
+        [projectInput, tagsInput].forEach(input => {
+            input.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     this.applyFilters();
@@ -289,19 +302,60 @@ class TaskWarriorUI {
         });
         
         // Re-render tasks with the new filter
+        this.updateProjectsList();
         this.renderTasks();
+    }
+
+    updateProjectsList() {
+        this.projects.clear();
+        this.tasks.forEach(task => {
+            if (task.project) {
+                this.projects.add(task.project);
+            }
+        });
+        this.updateProjectSuggestions();
+    }
+    
+    updateProjectSuggestions(filter = '') {
+        const datalist = document.getElementById('project-suggestions');
+        if (!datalist) return;
+        
+        // Clear existing options
+        datalist.innerHTML = '';
+        
+        // Filter and sort projects
+        const filteredProjects = Array.from(this.projects)
+            .filter(project => 
+                project.toLowerCase().includes(filter.toLowerCase())
+            )
+            .sort();
+        
+        // Add filtered projects to datalist
+        filteredProjects.forEach(project => {
+            const option = document.createElement('option');
+            option.value = project;
+            datalist.appendChild(option);
+        });
     }
 
     renderTasks() {
         const container = document.getElementById('tasks-container');
         if (!container) return;
         
+        // Update projects list whenever tasks are rendered
+        this.updateProjectsList();
+        
         const filteredTasks = this.getFilteredTasks();
+        
         if (filteredTasks.length === 0) {
-            container.innerHTML = '<div class="loading">No tasks found' + (this.currentContext ? ` in context "${this.currentContext}"` : '') + '</div>';
+            container.innerHTML = '<div class="no-tasks">No tasks found' + 
+                (this.currentContext ? ` in context "${this.currentContext}"` : '') + 
+                (this.currentFilters.project ? ` for project "${this.currentFilters.project}"` : '') + 
+                (this.currentFilters.tags.length > 0 ? ` with tags: ${this.currentFilters.tags.join(', ')}` : '') + 
+                '</div>';
             return;
         }
-
+        
         container.innerHTML = filteredTasks.map(task => this.renderTask(task)).join('');
     }
 
