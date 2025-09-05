@@ -68,20 +68,48 @@ class TaskWarriorUI {
             this.showLoading(true);
             this.hideError();
 
-            const response = await fetch('/api/tasks');
-            const data = await response.json();
+            // Load tasks and projects in parallel
+            const [tasksResponse, projectsResponse] = await Promise.all([
+                fetch('/api/tasks'),
+                fetch('/api/projects')
+            ]);
 
-            if (data.success) {
-                this.tasks = data.tasks;
+            const tasksData = await tasksResponse.json();
+            const projectsData = await projectsResponse.json();
+
+            if (tasksData.success) {
+                this.tasks = tasksData.tasks;
                 this.renderTasks();
             } else {
-                this.showError(data.error || 'Failed to load tasks');
+                this.showError(tasksData.error || 'Failed to load tasks');
+            }
+
+            if (projectsData.success) {
+                this.updateProjectDatalist(projectsData.projects);
             }
         } catch (error) {
             this.showError('Network error: ' + error.message);
         } finally {
             this.showLoading(false);
         }
+    }
+    
+    // Update the project datalist with all available projects
+    updateProjectDatalist(projects) {
+        const datalist = document.getElementById('project-options');
+        if (!datalist) return;
+        
+        // Clear existing options
+        datalist.innerHTML = '';
+        
+        // Add projects to datalist
+        projects.forEach(project => {
+            if (project) {  // Only add non-empty projects
+                const option = document.createElement('option');
+                option.value = project;
+                datalist.appendChild(option);
+            }
+        });
     }
 
     async addTask() {

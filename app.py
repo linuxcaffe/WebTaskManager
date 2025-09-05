@@ -92,6 +92,31 @@ def get_tasks():
             'error': result['stderr']
         }), 500
 
+@app.route('/api/projects')
+def get_projects():
+    """Get all unique projects from TaskWarrior, including completed tasks"""
+    # Get projects from all tasks (including completed ones)
+    result = run_task_command('task _projects')
+    
+    if result['success']:
+        try:
+            # Split the output by newlines and filter out empty lines
+            projects = [p.strip() for p in result['stdout'].split('\n') if p.strip()]
+            return jsonify({
+                'success': True,
+                'projects': projects
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to parse projects: {str(e)}'
+            }), 500
+    else:
+        return jsonify({
+            'success': False,
+            'error': result['stderr']
+        }), 500
+
 @app.route('/api/task/<int:task_id>/start', methods=['POST'])
 def start_task(task_id):
     """Start a task"""
