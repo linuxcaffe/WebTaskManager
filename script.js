@@ -22,6 +22,11 @@ class TaskWarriorUI {
         });
     }
 
+    handleAddTask(e) {
+        e.preventDefault();
+        this.addTask();
+    }
+
     async loadTasks() {
         try {
             this.showLoading(true);
