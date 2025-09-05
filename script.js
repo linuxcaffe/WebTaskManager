@@ -5,6 +5,10 @@ class TaskWarriorUI {
         this.tasks = [];
         this.currentEditingTask = null;
         this.currentContext = ''; // 'pro', 'perso', or '' for all
+        this.currentFilters = {
+            project: null,
+            tags: []
+        };
         this.initializeEventListeners();
         this.loadTasks();
     }
@@ -19,6 +23,20 @@ class TaskWarriorUI {
         // Add context selection event listeners
         document.querySelectorAll('.context-option').forEach(button => {
             button.addEventListener('click', (e) => this.setContext(e.target.getAttribute('data-context')));
+        });
+
+        // Add advanced filters event listeners
+        document.getElementById('apply-filters').addEventListener('click', () => this.applyFilters());
+        document.getElementById('clear-filters').addEventListener('click', () => this.clearFilters());
+        
+        // Apply filters on Enter key in filter inputs
+        ['filter-project', 'filter-tags'].forEach(id => {
+            document.getElementById(id).addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.applyFilters();
+                }
+            });
         });
     }
 
@@ -202,12 +220,59 @@ class TaskWarriorUI {
         }
     }
 
-    // Filter tasks based on current context
+    // Filter tasks based on current context and advanced filters
     getFilteredTasks() {
-        if (!this.currentContext) return this.tasks;
         return this.tasks.filter(task => {
-            return task.tags && task.tags.includes(this.currentContext);
+            // Filter by context (pro/perso)
+            if (this.currentContext) {
+                if (!task.tags || !task.tags.includes(this.currentContext)) {
+                    return false;
+                }
+            }
+            
+            // Filter by project
+            if (this.currentFilters.project && task.project !== this.currentFilters.project) {
+                return false;
+            }
+            
+            // Filter by tags
+            if (this.currentFilters.tags && this.currentFilters.tags.length > 0) {
+                if (!task.tags || !this.currentFilters.tags.every(tag => task.tags.includes(tag))) {
+                    return false;
+                }
+            }
+            
+            return true;
         });
+    }
+    
+    // Apply advanced filters
+    applyFilters() {
+        const project = document.getElementById('filter-project').value.trim();
+        const tags = document.getElementById('filter-tags').value
+            .split(',')
+            .map(tag => tag.trim())
+            .filter(tag => tag.length > 0);
+            
+        this.currentFilters = {
+            project: project || null,
+            tags: tags
+        };
+        
+        this.renderTasks();
+    }
+    
+    // Clear all filters
+    clearFilters() {
+        document.getElementById('filter-project').value = '';
+        document.getElementById('filter-tags').value = '';
+        
+        this.currentFilters = {
+            project: null,
+            tags: []
+        };
+        
+        this.renderTasks();
     }
 
     // Set the current context and update the UI

@@ -66,6 +66,22 @@
             </form>
         </div>
 
+        <div class="filters-section">
+            <h2>Advanced Filters</h2>
+            <div class="filters-container">
+                <div class="form-group">
+                    <label for="filter-project">Filter by Project:</label>
+                    <input type="text" id="filter-project" placeholder="Enter project name">
+                </div>
+                <div class="form-group">
+                    <label for="filter-tags">Filter by Tag:</label>
+                    <input type="text" id="filter-tags" placeholder="Enter tag (comma-separated)">
+                </div>
+                <button id="apply-filters" class="btn btn-primary">Apply Filters</button>
+                <button id="clear-filters" class="btn btn-secondary">Clear Filters</button>
+            </div>
+        </div>
+
         <div class="tasks-section">
             <h2>Pending Tasks</h2>
             <div id="loading" class="loading">Loading tasks...</div>
