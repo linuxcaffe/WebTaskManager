@@ -140,17 +140,12 @@ def modify_task(task_id):
     
     if 'tags' in data:
         # First clear all existing tags, then add new ones
-        if isinstance(data['tags'], list) and data['tags']:
-            # Clear existing tags first
-            clear_result = run_task_command(f'task rc.confirmation=off {task_id} modify -TAGS')
-            if clear_result['success']:
-                # Add new tags
-                tag_str = ' '.join([f'+{tag}' for tag in data['tags'] if tag.strip()])
-                if tag_str:
-                    modifications.append(tag_str)
-        else:
-            # Clear all tags if empty list provided
-            clear_result = run_task_command(f'task rc.confirmation=off {task_id} modify -TAGS')
+        clear_result = run_task_command(f'task rc.confirmation=off {task_id} modify -TAGS')
+        if clear_result['success'] and isinstance(data['tags'], list) and data['tags']:
+            # Add new tags
+            for tag in data['tags']:
+                if tag and tag.strip():
+                    modifications.append(f'+{tag.strip()}')
     
     if 'due' in data:
         if data['due']:

@@ -27,6 +27,11 @@ class TaskWarriorUI {
         this.addTask();
     }
 
+    handleEditTask(e) {
+        e.preventDefault();
+        this.saveTaskEdit();
+    }
+
     async loadTasks() {
         try {
             this.showLoading(true);
