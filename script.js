@@ -148,11 +148,19 @@ class TaskWarriorUI {
             const data = await response.json();
 
             if (data.success) {
-                this.showNotification('Task added successfully', 'success');
-                this.clearAddForm();
-                this.loadTasks();
+                if (data.task) {
+                    // Ajouter la nouvelle tâche au tableau local
+                    this.tasks.unshift(data.task);
+                    this.renderTasks();
+                    this.showNotification('Tâche ajoutée avec succès', 'success');
+                    this.clearAddForm();
+                } else {
+                    this.showNotification('La tâche a été créée mais n\'a pas pu être récupérée', 'warning');
+                    // Recharger toutes les tâches pour s'assurer d'avoir les dernières données
+                    this.loadTasks();
+                }
             } else {
-                this.showNotification(data.error || 'Failed to add task', 'error');
+                this.showNotification(data.error || 'Échec de l\'ajout de la tâche', 'error');
             }
         } catch (error) {
             this.showNotification('Network error: ' + error.message, 'error');
@@ -175,8 +183,21 @@ class TaskWarriorUI {
             const data = await response.json();
 
             if (data.success) {
+                // Mettre à jour la tâche dans le tableau local ou la supprimer si nécessaire
+                if (action === 'delete') {
+                    this.tasks = this.tasks.filter(task => task.uuid !== taskId);
+                } else if (data.task) {
+                    // Si le serveur renvoie la tâche mise à jour, on l'utilise
+                    const taskIndex = this.tasks.findIndex(t => t.uuid === taskId);
+                    if (taskIndex !== -1) {
+                        this.tasks[taskIndex] = data.task;
+                    }
+                } else {
+                    // Sinon, on recharge les tâches depuis le serveur
+                    return this.loadTasks();
+                }
+                this.renderTasks();
                 this.showNotification(`Task ${action} successful`, 'success');
-                this.loadTasks();
             } else {
                 this.showNotification(data.message || `Failed to ${action} task`, 'error');
             }
@@ -250,9 +271,14 @@ class TaskWarriorUI {
             const data = await response.json();
 
             if (data.success) {
+                // Mettre à jour la tâche dans le tableau local
+                const taskIndex = this.tasks.findIndex(t => t.uuid === this.currentEditingTask.uuid);
+                if (taskIndex !== -1) {
+                    this.tasks[taskIndex] = data.task;
+                }
+                this.renderTasks();
                 this.showNotification('Task updated successfully', 'success');
                 this.closeModal();
-                this.loadTasks();
             } else {
                 this.showNotification(data.error || 'Failed to update task', 'error');
             }

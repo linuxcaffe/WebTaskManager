@@ -245,12 +245,28 @@ def add_task():
     if data.get('duration'):
         command_parts.append(f'estTime:{data["duration"]}')
     
-    command = f'task {" ".join(command_parts)}'
+    # Créer la tâche
+    command = f'task {" ".join(command_parts)} export'
     result = run_task_command(command)
     
+    # Vérifier si la création a réussi
+    if result['success'] and result['stdout'].strip():
+        try:
+            task = json.loads(result['stdout'])
+            if task:  # Vérifier que la liste des tâches n'est pas vide
+                return jsonify({
+                    'success': True,
+                    'message': 'Task created successfully',
+                    'task': task[0]  # Prendre la première tâche créée
+                })
+        except (json.JSONDecodeError, IndexError) as e:
+            print(f"Error parsing task data: {e}")
+    
+    # En cas d'erreur
     return jsonify({
-        'success': result['success'],
-        'message': result['stdout'] if result['success'] else result['stderr']
+        'success': result.get('success', False),
+        'error': result.get('stderr', 'Failed to create task'),
+        'task': None
     })
 
 if __name__ == '__main__':
