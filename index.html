@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TaskWarrior Web UI</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="task-editor.js"></script>
 </head>
 <body>
     <div class="container">
@@ -98,54 +99,7 @@
         </div>
     </div>
 
-    <!-- Edit Task Modal -->
-    <div id="edit-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Edit Task</h3>
-                <span class="close">&times;</span>
-            </div>
-            <form id="edit-task-form">
-                <div class="form-group">
-                    <label for="edit-description">Description:</label>
-                    <input type="text" id="edit-description" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-tags">Tags:</label>
-                    <input type="text" id="edit-tags" placeholder="Comma-separated tags">
-                </div>
-                <div class="form-group">
-                    <label for="edit-project">Project:</label>
-                    <input type="text" id="edit-project" placeholder="Project name">
-                </div>
-                <div class="form-group">
-                    <label for="edit-priority">Priority:</label>
-                    <select id="edit-priority">
-                        <option value="">None</option>
-                        <option value="H">High</option>
-                        <option value="M">Medium</option>
-                        <option value="L">Low</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="edit-due">Due Date:</label>
-                    <input type="datetime-local" id="edit-due">
-                </div>
-                <div class="form-group">
-                    <label for="edit-scheduled">Scheduled:</label>
-                    <input type="datetime-local" id="edit-scheduled">
-                </div>
-                <div class="form-group">
-                    <label for="edit-duration">Duration:</label>
-                    <input type="text" id="edit-duration" placeholder="e.g., 30min, 1h30m, 2d">
-                </div>
-                <div class="modal-actions">
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                    <button type="button" class="btn btn-secondary" id="cancel-edit">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- Le modal d'édition sera créé dynamiquement par TaskEditor -->
 
     <div id="notification" class="notification"></div>
 

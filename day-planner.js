@@ -9,6 +9,16 @@ class DayPlanner {
         this.startHour = 6;
         this.endHour = 22;
         
+        // Initialiser le composant TaskEditor unifié
+        this.taskEditor = new TaskEditor({
+            showAllFields: true, // Afficher tous les champs comme dans index.html
+            priorityFormat: 'words', // high/medium/low
+            language: 'fr',
+            modalId: 'day-planner-task-editor',
+            onSave: (taskData, isEdit) => this.handleTaskSave(taskData, isEdit),
+            onCancel: () => this.handleTaskCancel()
+        });
+        
         this.init();
     }
 
@@ -26,26 +36,11 @@ class DayPlanner {
         document.getElementById('reset-btn').addEventListener('click', () => this.resetPlanner());
         document.getElementById('add-task-btn').addEventListener('click', () => this.openTaskModal());
         
-        // Modal
-        document.getElementById('close-modal').addEventListener('click', () => this.closeTaskModal());
-        document.getElementById('cancel-task').addEventListener('click', () => this.closeTaskModal());
-        document.getElementById('task-form').addEventListener('submit', (e) => this.handleTaskSubmit(e));
-        
         // Tri des tâches
         document.getElementById('sort-tasks').addEventListener('change', (e) => this.sortTasks(e.target.value));
-        
-        // Fermer modal en cliquant à l'extérieur
-        document.getElementById('task-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'task-modal') {
-                this.closeTaskModal();
-            }
-        });
 
         // Raccourcis clavier
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeTaskModal();
-            }
             if (e.ctrlKey && e.key === 's') {
                 e.preventDefault();
                 this.saveToFile();
@@ -130,66 +125,66 @@ class DayPlanner {
     }
 
     openTaskModal(task = null) {
-        const modal = document.getElementById('task-modal');
-        const modalTitle = document.getElementById('modal-title');
-        const form = document.getElementById('task-form');
-
-        this.currentEditingTask = task;
-
+        // Utiliser le nouveau composant TaskEditor
         if (task) {
-            modalTitle.textContent = 'Modifier la tâche';
-            document.getElementById('task-title').value = task.title;
-            document.getElementById('task-description').value = task.description || '';
-            document.getElementById('task-duration').value = task.duration;
-            document.getElementById('task-priority').value = task.priority;
+            this.taskEditor.show({
+                id: task.id,
+                description: task.title, // Mapper title vers description
+                priority: task.priority,
+                duration: this.formatDurationForEditor(task.duration),
+                tags: [], // Pas de tags dans le day planner pour l'instant
+                project: '', // Pas de projet dans le day planner pour l'instant
+                due: null,
+                scheduled: null
+            });
         } else {
-            modalTitle.textContent = 'Ajouter une tâche';
-            form.reset();
+            this.taskEditor.show();
         }
-
-        modal.classList.add('show');
-        document.getElementById('task-title').focus();
     }
 
     closeTaskModal() {
-        const modal = document.getElementById('task-modal');
-        modal.classList.remove('show');
+        this.taskEditor.hide();
         this.currentEditingTask = null;
     }
 
-    handleTaskSubmit(e) {
-        e.preventDefault();
+    // Gestionnaire unifié pour la sauvegarde des tâches
+    handleTaskSave(taskData, isEdit) {
+        const duration = this.parseDurationFromEditor(taskData.duration);
         
-        const title = document.getElementById('task-title').value.trim();
-        const description = document.getElementById('task-description').value.trim();
-        const duration = parseInt(document.getElementById('task-duration').value);
-        const priority = document.getElementById('task-priority').value;
-
-        if (!title || !duration) {
+        if (!taskData.description || !duration) {
             alert('Veuillez remplir tous les champs obligatoires.');
             return;
         }
 
-        const taskData = {
-            id: this.currentEditingTask ? this.currentEditingTask.id : Date.now(),
-            title,
-            description,
-            duration,
-            priority
+        const finalTaskData = {
+            id: isEdit ? taskData.id : Date.now(),
+            title: taskData.description, // Mapper description vers title
+            description: '', // Pas de description séparée dans le day planner
+            duration: duration,
+            priority: taskData.priority || 'medium',
+            // Stocker les nouveaux champs même s'ils ne sont pas utilisés dans l'affichage
+            tags: taskData.tags || [],
+            project: taskData.project || '',
+            due: taskData.due || null,
+            scheduled: taskData.scheduled || null
         };
 
-        if (this.currentEditingTask) {
-            const index = this.tasks.findIndex(t => t.id === this.currentEditingTask.id);
+        if (isEdit) {
+            const index = this.tasks.findIndex(t => t.id === taskData.id);
             if (index !== -1) {
-                this.tasks[index] = taskData;
+                this.tasks[index] = finalTaskData;
             }
         } else {
-            this.tasks.push(taskData);
+            this.tasks.push(finalTaskData);
         }
 
         this.saveTasks();
         this.renderTasks();
-        this.closeTaskModal();
+    }
+    
+    // Gestionnaire pour l'annulation
+    handleTaskCancel() {
+        this.currentEditingTask = null;
     }
 
     renderTasks() {
@@ -509,6 +504,46 @@ class DayPlanner {
             this.renderScheduledTasks();
             this.showNotification('Planification réinitialisée', 'info');
         }
+    }
+
+    // Méthodes utilitaires pour la conversion de durée
+    formatDurationForEditor(minutes) {
+        if (minutes < 60) {
+            return `${minutes}min`;
+        } else {
+            const hours = Math.floor(minutes / 60);
+            const remainingMinutes = minutes % 60;
+            if (remainingMinutes === 0) {
+                return `${hours}h`;
+            } else {
+                return `${hours}h${remainingMinutes}m`;
+            }
+        }
+    }
+    
+    parseDurationFromEditor(durationString) {
+        if (!durationString) return 0;
+        
+        // Gérer les formats: "30min", "1h", "1h30m", "90"
+        const hourMatch = durationString.match(/(\d+)h/);
+        const minuteMatch = durationString.match(/(\d+)m/);
+        const plainNumber = durationString.match(/^(\d+)$/);
+        
+        let totalMinutes = 0;
+        
+        if (hourMatch) {
+            totalMinutes += parseInt(hourMatch[1]) * 60;
+        }
+        
+        if (minuteMatch) {
+            totalMinutes += parseInt(minuteMatch[1]);
+        }
+        
+        if (plainNumber && !hourMatch && !minuteMatch) {
+            totalMinutes = parseInt(plainNumber[1]);
+        }
+        
+        return totalMinutes;
     }
 
     showNotification(message, type = 'info') {

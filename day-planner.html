@@ -6,12 +6,17 @@
     <title>Planificateur de Journée</title>
     <link rel="stylesheet" href="day-planner.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="task-editor.js"></script>
 </head>
 <body>
     <div class="app-container">
         <header class="app-header">
             <h1>Planificateur de Journée</h1>
             <div class="header-actions">
+                <a href="index.html" class="btn btn-secondary">
+                    <span class="icon">🏠</span>
+                    Accueil
+                </a>
                 <button id="save-btn" class="btn btn-primary">
                     <span class="icon">💾</span>
                     Sauvegarder
@@ -60,53 +65,7 @@
         </div>
     </div>
 
-    <!-- Modal pour ajouter/modifier une tâche -->
-    <div id="task-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modal-title">Ajouter une tâche</h3>
-                <button class="close-btn" id="close-modal">&times;</button>
-            </div>
-            <form id="task-form">
-                <div class="form-group">
-                    <label for="task-title">Titre de la tâche *</label>
-                    <input type="text" id="task-title" required>
-                </div>
-                <div class="form-group">
-                    <label for="task-description">Description</label>
-                    <textarea id="task-description" rows="3"></textarea>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="task-duration">Durée estimée *</label>
-                        <select id="task-duration" required>
-                            <option value="">Sélectionner...</option>
-                            <option value="15">15 min</option>
-                            <option value="30">30 min</option>
-                            <option value="45">45 min</option>
-                            <option value="60">1h</option>
-                            <option value="90">1h30</option>
-                            <option value="120">2h</option>
-                            <option value="180">3h</option>
-                            <option value="240">4h</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="task-priority">Priorité</label>
-                        <select id="task-priority">
-                            <option value="low">Faible</option>
-                            <option value="medium" selected>Moyenne</option>
-                            <option value="high">Élevée</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-actions">
-                    <button type="submit" class="btn btn-primary">Sauvegarder</button>
-                    <button type="button" class="btn btn-secondary" id="cancel-task">Annuler</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- Le modal d'édition sera créé dynamiquement par TaskEditor -->
 
     <!-- Overlay pour le drag and drop -->
     <div id="drag-overlay" class="drag-overlay"></div>

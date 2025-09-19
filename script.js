@@ -10,6 +10,17 @@ class TaskWarriorUI {
             tags: []
         };
         this.projects = new Set(); // Pour stocker la liste des projets uniques
+        
+        // Initialiser le composant TaskEditor
+        this.taskEditor = new TaskEditor({
+            showAllFields: true,
+            priorityFormat: 'letters',
+            language: 'en',
+            modalId: 'unified-task-editor',
+            onSave: (taskData, isEdit) => this.handleTaskSave(taskData, isEdit),
+            onCancel: () => this.handleTaskCancel()
+        });
+        
         this.initializeEventListeners();
         this.loadTasks();
         
@@ -19,9 +30,6 @@ class TaskWarriorUI {
 
     initializeEventListeners() {
         document.getElementById('add-task-form').addEventListener('submit', (e) => this.handleAddTask(e));
-        document.getElementById('edit-task-form').addEventListener('submit', (e) => this.handleEditTask(e));
-        document.getElementById('cancel-edit').addEventListener('click', () => this.closeModal());
-        document.querySelector('.close').addEventListener('click', () => this.closeModal());
         document.getElementById('refresh-btn').addEventListener('click', () => this.loadTasks());
         
         // Add context selection event listeners
@@ -207,80 +215,111 @@ class TaskWarriorUI {
     }
 
     openEditModal(task) {
-        this.currentEditingTask = task;
-        
-        document.getElementById('edit-description').value = task.description || '';
-        document.getElementById('edit-tags').value = task.tags ? task.tags.join(', ') : '';
-        document.getElementById('edit-priority').value = task.priority || '';
-        document.getElementById('edit-project').value = task.project || '';
-        
-        // Format dates for datetime-local input
-        if (task.due) {
-            document.getElementById('edit-due').value = this.formatDateForInput(task.due);
-        } else {
-            document.getElementById('edit-due').value = '';
-        }
-        
-        if (task.scheduled) {
-            document.getElementById('edit-scheduled').value = this.formatDateForInput(task.scheduled);
-        } else {
-            document.getElementById('edit-scheduled').value = '';
-        }
-        
-        document.getElementById('edit-duration').value = task.estTime  || '';
-        
-
-        document.getElementById('edit-modal').style.display = 'block';
+        // Utiliser le nouveau composant TaskEditor
+        this.taskEditor.show({
+            id: task.id,
+            uuid: task.uuid,
+            description: task.description,
+            tags: task.tags,
+            project: task.project,
+            priority: task.priority,
+            due: task.due,
+            scheduled: task.scheduled,
+            duration: task.estTime
+        });
     }
 
     closeModal() {
-        document.getElementById('edit-modal').style.display = 'none';
+        // Cette méthode est maintenant gérée par TaskEditor
+        this.taskEditor.hide();
         this.currentEditingTask = null;
     }
 
-    async saveTaskEdit() {
-        if (!this.currentEditingTask) return;
-
-        const description = document.getElementById('edit-description').value.trim();
-        const tags = document.getElementById('edit-tags').value.trim();
-        const project = document.getElementById('edit-project').value.trim();
-        const priority = document.getElementById('edit-priority').value;
-        const due = document.getElementById('edit-due').value;
-        const scheduled = document.getElementById('edit-scheduled').value;
-        const duration = document.getElementById('edit-duration').value.trim();
-
-        const taskData = {
-            description: description,
-            tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-            project: project || null,
-            priority: priority || null,
-            due: due ? this.formatDateForTask(due) : null,
-            scheduled: scheduled ? this.formatDateForTask(scheduled) : null,
-            est: duration || null
+    // Gestionnaire unifié pour la sauvegarde des tâches (ajout et modification)
+    async handleTaskSave(taskData, isEdit) {
+        if (isEdit) {
+            await this.saveTaskEdit(taskData);
+        } else {
+            await this.addTaskFromEditor(taskData);
+        }
+    }
+    
+    // Gestionnaire pour l'annulation
+    handleTaskCancel() {
+        this.currentEditingTask = null;
+    }
+    
+    async saveTaskEdit(taskData) {
+        const modifiedTaskData = {
+            description: taskData.description,
+            tags: taskData.tags || [],
+            project: taskData.project || null,
+            priority: taskData.priority || null,
+            due: taskData.due ? this.formatDateForTask(taskData.due) : null,
+            scheduled: taskData.scheduled ? this.formatDateForTask(taskData.scheduled) : null,
+            est: taskData.duration || null
         };
 
         try {
-            const response = await fetch(`/api/task/${this.currentEditingTask.id}/modify`, {
+            const response = await fetch(`/api/task/${taskData.id}/modify`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(taskData)
+                body: JSON.stringify(modifiedTaskData)
             });
 
             const data = await response.json();
 
             if (data.success) {
                 // Mettre à jour la tâche dans le tableau local
-                const taskIndex = this.tasks.findIndex(t => t.uuid === this.currentEditingTask.uuid);
+                const taskIndex = this.tasks.findIndex(t => t.uuid === taskData.uuid);
                 if (taskIndex !== -1) {
                     this.tasks[taskIndex] = data.task;
                 }
                 this.renderTasks();
                 this.showNotification('Task updated successfully', 'success');
-                this.closeModal();
             } else {
                 this.showNotification(data.error || 'Failed to update task', 'error');
+            }
+        } catch (error) {
+            this.showNotification('Network error: ' + error.message, 'error');
+        }
+    }
+    
+    async addTaskFromEditor(taskData) {
+        const newTaskData = {
+            description: taskData.description,
+            tags: taskData.tags || [],
+            project: taskData.project || null,
+            priority: taskData.priority || null,
+            due: taskData.due ? this.formatDateForTask(taskData.due) : null,
+            scheduled: taskData.scheduled ? this.formatDateForTask(taskData.scheduled) : null,
+            duration: taskData.duration || null
+        };
+
+        try {
+            const response = await fetch('/api/task/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newTaskData)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                if (data.task) {
+                    this.tasks.unshift(data.task);
+                    this.renderTasks();
+                    this.showNotification('Tâche ajoutée avec succès', 'success');
+                } else {
+                    this.showNotification('La tâche a été créée mais n\'a pas pu être récupérée', 'warning');
+                    this.loadTasks();
+                }
+            } else {
+                this.showNotification(data.error || 'Échec de l\'ajout de la tâche', 'error');
             }
         } catch (error) {
             this.showNotification('Network error: ' + error.message, 'error');
