@@ -19,6 +19,17 @@ class DayPlanner {
             onCancel: () => this.handleTaskCancel()
         });
         
+        // Initialiser le composant TaskCreator en mode modal
+        this.taskCreator = new TaskCreator({
+            showAllFields: true, // Afficher tous les champs
+            priorityFormat: 'words', // high/medium/low
+            language: 'fr',
+            containerId: 'day-planner-task-creator-modal',
+            inline: false, // Mode modal
+            onSubmit: (taskData) => this.handleTaskCreate(taskData),
+            onCancel: () => this.closeTaskCreatorModal()
+        });
+        
         this.init();
     }
 
@@ -28,13 +39,16 @@ class DayPlanner {
         this.displayCurrentDate();
         this.renderTasks();
         this.renderScheduledTasks();
+        
+        // Créer le container pour le modal TaskCreator
+        this.createTaskCreatorModal();
     }
 
     setupEventListeners() {
         // Boutons principaux
         document.getElementById('save-btn').addEventListener('click', () => this.saveToFile());
         document.getElementById('reset-btn').addEventListener('click', () => this.resetPlanner());
-        document.getElementById('add-task-btn').addEventListener('click', () => this.openTaskModal());
+        document.getElementById('add-task-btn').addEventListener('click', () => this.openTaskCreatorModal());
         
         // Tri des tâches
         document.getElementById('sort-tasks').addEventListener('change', (e) => this.sortTasks(e.target.value));
@@ -147,7 +161,7 @@ class DayPlanner {
         this.currentEditingTask = null;
     }
 
-    // Gestionnaire unifié pour la sauvegarde des tâches
+    // Gestionnaire unifié pour la sauvegarde des tâches (édition)
     handleTaskSave(taskData, isEdit) {
         const duration = this.parseDurationFromEditor(taskData.duration);
         
@@ -180,6 +194,63 @@ class DayPlanner {
 
         this.saveTasks();
         this.renderTasks();
+    }
+    
+    // Créer le container pour le modal TaskCreator
+    createTaskCreatorModal() {
+        const modalContainer = document.createElement('div');
+        modalContainer.id = 'day-planner-task-creator-modal';
+        modalContainer.className = 'modal';
+        modalContainer.style.display = 'none';
+        document.body.appendChild(modalContainer);
+    }
+    
+    // Ouvrir le modal de création de tâche
+    openTaskCreatorModal() {
+        const modal = document.getElementById('day-planner-task-creator-modal');
+        if (modal) {
+            modal.style.display = 'block';
+        }
+    }
+    
+    // Fermer le modal de création de tâche
+    closeTaskCreatorModal() {
+        const modal = document.getElementById('day-planner-task-creator-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    // Gestionnaire unifié pour la création de tâches
+    handleTaskCreate(taskData) {
+        const duration = this.parseDurationFromEditor(taskData.duration);
+        
+        if (!taskData.description || !duration) {
+            alert('Veuillez remplir tous les champs obligatoires.');
+            return;
+        }
+
+        const newTaskData = {
+            id: Date.now(),
+            title: taskData.description,
+            description: '',
+            duration: duration,
+            priority: taskData.priority || 'medium',
+            tags: taskData.tags || [],
+            project: taskData.project || '',
+            due: taskData.due || null,
+            scheduled: taskData.scheduled || null
+        };
+
+        this.tasks.push(newTaskData);
+        this.saveTasks();
+        this.renderTasks();
+        
+        // Fermer le modal
+        this.closeTaskCreatorModal();
+        
+        // Afficher une notification de succès
+        this.showNotification('Tâche ajoutée avec succès !', 'success');
     }
     
     // Gestionnaire pour l'annulation

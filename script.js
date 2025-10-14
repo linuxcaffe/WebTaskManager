@@ -21,6 +21,16 @@ class TaskWarriorUI {
             onCancel: () => this.handleTaskCancel()
         });
         
+        // Initialiser le composant TaskCreator
+        this.taskCreator = new TaskCreator({
+            showAllFields: true,
+            priorityFormat: 'letters',
+            language: 'en',
+            containerId: 'task-creator-container',
+            inline: true,
+            onSubmit: (taskData) => this.handleTaskCreate(taskData)
+        });
+        
         this.initializeEventListeners();
         this.loadTasks();
         
@@ -29,7 +39,6 @@ class TaskWarriorUI {
     }
 
     initializeEventListeners() {
-        document.getElementById('add-task-form').addEventListener('submit', (e) => this.handleAddTask(e));
         document.getElementById('refresh-btn').addEventListener('click', () => this.loadTasks());
         
         // Add context selection event listeners
@@ -61,9 +70,9 @@ class TaskWarriorUI {
         });
     }
 
-    handleAddTask(e) {
-        e.preventDefault();
-        this.addTask();
+    // Gestionnaire unifié pour la création de tâches
+    handleTaskCreate(taskData) {
+        this.addTaskFromCreator(taskData);
     }
 
     handleEditTask(e) {
@@ -94,6 +103,10 @@ class TaskWarriorUI {
 
             if (projectsData.success) {
                 this.updateProjectDatalist(projectsData.projects);
+                // Mettre à jour aussi les suggestions du TaskCreator
+                if (this.taskCreator) {
+                    this.taskCreator.updateProjectSuggestions(projectsData.projects);
+                }
             }
         } catch (error) {
             this.showError('Network error: ' + error.message);
@@ -120,28 +133,15 @@ class TaskWarriorUI {
         });
     }
 
-    async addTask() {
-        const description = document.getElementById('task-description').value.trim();
-        const tags = document.getElementById('task-tags').value.trim();
-        const project = document.getElementById('task-project').value.trim();
-        const priority = document.getElementById('task-priority').value;
-        const due = document.getElementById('task-due').value;
-        const scheduled = document.getElementById('task-scheduled').value;
-        const duration = document.getElementById('task-duration').value.trim();
-
-        if (!description) {
-            this.showNotification('Description is required', 'error');
-            return;
-        }
-
-        const taskData = {
-            description: description,
-            tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-            project: project || null,
-            priority: priority || null,
-            due: due ? this.formatDateForTask(due) : null,
-            scheduled: scheduled ? this.formatDateForTask(scheduled) : null,
-            duration: duration || null
+    async addTaskFromCreator(taskData) {
+        const newTaskData = {
+            description: taskData.description,
+            tags: taskData.tags || [],
+            project: taskData.project || null,
+            priority: taskData.priority || null,
+            due: taskData.due ? this.formatDateForTask(taskData.due) : null,
+            scheduled: taskData.scheduled ? this.formatDateForTask(taskData.scheduled) : null,
+            duration: taskData.duration || null
         };
 
         try {
@@ -150,21 +150,19 @@ class TaskWarriorUI {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(taskData)
+                body: JSON.stringify(newTaskData)
             });
 
             const data = await response.json();
 
             if (data.success) {
                 if (data.task) {
-                    // Ajouter la nouvelle tâche au tableau local
                     this.tasks.unshift(data.task);
                     this.renderTasks();
                     this.showNotification('Tâche ajoutée avec succès', 'success');
-                    this.clearAddForm();
+                    // Le TaskCreator se vide automatiquement
                 } else {
                     this.showNotification('La tâche a été créée mais n\'a pas pu être récupérée', 'warning');
-                    // Recharger toutes les tâches pour s'assurer d'avoir les dernières données
                     this.loadTasks();
                 }
             } else {
@@ -515,10 +513,7 @@ class TaskWarriorUI {
         }
     }
 
-    clearAddForm() {
-        document.getElementById('add-task-form').reset();
-        document.getElementById('task-project').value = '';
-    }
+    // Cette méthode n'est plus nécessaire car TaskCreator gère son propre nettoyage
 
     showLoading(show) {
         const loading = document.getElementById('loading');
