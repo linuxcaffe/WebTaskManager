@@ -11,6 +11,7 @@ import sys
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
+from tabulate import tabulate
 
 # ========= Configuration calendrier =========
 GRANULARITY_MIN = 30  # split autorisé uniquement par 30 min
@@ -140,7 +141,13 @@ def load_tasks_from_tw(project: str) -> Dict[str, Task]:
         depends = []
         dep = t.get("depends")
         if dep:
-            depends = [d.strip() for d in dep.split(",") if d.strip()]
+            if isinstance(dep, str):
+                depends = [d.strip() for d in dep.split(",") if d.strip()]
+            elif isinstance(dep, list):
+                depends = [str(d).strip() for d in dep if str(d).strip()]
+            else:
+                # Handle other types by converting to string first
+                depends = [str(dep).strip()] if str(dep).strip() else []
         due = parse_tw_datetime(t.get("due"))
         scheduled_lock = parse_tw_datetime(t.get("scheduled"))  # verrou
         # UDA
@@ -307,26 +314,35 @@ def compute_last_due_dates(tasks: Dict[str, Task]) -> None:
     order = topological_order(tasks)
     # Construire reverse-children
     children = defaultdict(list)
-    for u, t in tasks.items():
-        for p in t.depends:
-            children[p].append(u)
+    for task_id, task in tasks.items():
+        for dependency_id in task.depends:
+            children[dependency_id].append(task_id)
+    # Si la tache A depend de B alors A sera dans children[B]
 
     # Initialisation: sinks avec due
-    for u in reversed(order):
-        t = tasks[u]
-        if not children[u]:
-            if t.due:
-                t.last_due_date = t.due - dt.timedelta(minutes=t.est_min)
+    for task_id in reversed(order):
+        task = tasks[task_id]
+        if not children[task_id]:
+            # Tâche feuille : last_due_date = date d'échéance (moment où elle doit finir)
+            if task.due:
+                task.last_due_date = task.due
             else:
-                t.last_due_date = None  # pas de contrainte (sera resserré par les parents placés ensuite)
+                task.last_due_date = None  # pas de contrainte
         else:
-            # min des enfants.last_due_date - estTime
-            child_starts = [tasks[c].last_due_date for c in children[u] if tasks[c].last_due_date is not None]
-            if child_starts:
-                t.last_due_date = min(child_starts) - dt.timedelta(minutes=t.est_min)
+            # Tâche avec enfants : doit finir avant que ses enfants ne commencent
+            # child_start_dates = quand les enfants doivent commencer (last_due_date - est_min)
+            child_start_dates = []
+            for child_id in children[task_id]:
+                child_task = tasks[child_id]
+                if child_task.last_due_date is not None:
+                    child_start_date = child_task.last_due_date - dt.timedelta(minutes=child_task.est_min)
+                    child_start_dates.append(child_start_date)
+            
+            if child_start_dates:
+                task.last_due_date = min(child_start_dates)
             else:
-                t.last_due_date = None
-        t.critical_due_date = t.last_due_date  # initialement égal
+                task.last_due_date = None
+        task.critical_due_date = task.last_due_date  # initialement égal
     # Pas de retour: champs remplis in-place
 
 def schedule(tasks: Dict[str, Task], allow_split=True) -> None:
@@ -463,21 +479,23 @@ def print_report(tasks: Dict[str, Task]) -> None:
             delta_min = int((t.last_due_date - t.proposed_scheduled).total_seconds() // 60)
             if delta_min > NUDGE_THRESHOLD_MIN:
                 nudge = f"{delta_min//60}h"
-        rows.append((
+        rows.append([
             t.description,
             t.assignee or "-",
             t.pool,
             t.est_min,
-            fmt_tw_datetime_local(t.last_due_date),
-            fmt_tw_datetime_local(t.critical_due_date),
-            fmt_tw_datetime_local(t.proposed_scheduled),
+            fmt_tw_datetime_local(t.last_due_date) or "",
+            fmt_tw_datetime_local(t.critical_due_date) or "",
+            fmt_tw_datetime_local(t.proposed_scheduled) or "",
             nudge or ""
-        ))
-    # Affichage propre
+        ])
+    
+    # Affichage avec tabulate pour un rendu propre avec séparateurs alignés
     headers = ["Tâche", "Assignee", "Pool", "Durée(min)", "last_due_date", "critical_due_date", "proposed_scheduled", "Nudge"]
-    print("\t".join(headers))
-    for r in rows:
-        print("\t".join(str(x) if x is not None else "" for x in r))
+    if rows:
+        print(tabulate(rows, headers=headers, tablefmt="grid"))
+    else:
+        print("Aucune tâche à afficher.")
     print("=== Fin ===\n")
 
 def main():
