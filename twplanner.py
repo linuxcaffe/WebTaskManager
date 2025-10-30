@@ -348,104 +348,121 @@ def compute_last_due_dates(tasks: Dict[str, Task]) -> None:
 def schedule(tasks: Dict[str, Task], allow_split=True) -> None:
     """Place les tâches en backward en respectant la capacité."""
     # Calendriers par ressource
-    calendars: Dict[Tuple[str, str], ResourceCalendar] = {}
+    resource_calendars: Dict[Tuple[str, str], ResourceCalendar] = {}
 
-    def get_cal(pool: str, assignee: str) -> ResourceCalendar:
-        key = (pool, assignee)
-        if key not in calendars:
-            calendars[key] = ResourceCalendar(pool, assignee)
-        return calendars[key]
+    def get_calendar(pool: str, assignee: str) -> ResourceCalendar:
+        resource_key = (pool, assignee)
+        if resource_key not in resource_calendars:
+            resource_calendars[resource_key] = ResourceCalendar(pool, assignee)
+        return resource_calendars[resource_key]
 
-    # Construire graph children
-    children = defaultdict(list)
-    parents_count = defaultdict(int)
-    for u, t in tasks.items():
-        for p in t.depends:
-            children[p].append(u)
-        parents_count[u] = len(t.depends)
+    # Construire le graphe de dépendances
+    task_children = defaultdict(list)
+    dependency_count = defaultdict(int)
+    for task_id, task in tasks.items():
+        for dependency_id in task.depends:
+            task_children[dependency_id].append(task_id)
+        dependency_count[task_id] = len(task.depends)
 
     # Pré-réserver les tâches verrouillées (scheduled)
-    for u, t in tasks.items():
-        if t.status != "pending":
+    for task_id, task in tasks.items():
+        if task.status != "pending":
             continue
-        if t.scheduled_lock and t.est_min > 0 and t.pool != "ext" and t.assignee != "exterieur":
-            start = t.scheduled_lock
-            end = start + dt.timedelta(minutes=t.est_min)
-            get_cal(t.pool, t.assignee).reserve(start, end)
-            t.proposed_scheduled = start
-            # Ajuste la contrainte critique au verrou
-            t.critical_due_date = start
+        if task.scheduled_lock and task.est_min > 0 and task.pool != "ext" and task.assignee != "exterieur":
+            lock_start_time = task.scheduled_lock
+            lock_end_time = lock_start_time + dt.timedelta(minutes=task.est_min)
+            get_calendar(task.pool, task.assignee).reserve(lock_start_time, lock_end_time)
+            task.proposed_scheduled = lock_start_time
+            task.critical_due_date = lock_end_time
+            # Cette ligne était ajoutée par claude sonnet... je l'ai retiré pour ne pas perdre l'info
+            # de quand la tache doit vraiment être faite. C'est pas parce qu'on a planifié plus tot que ça
+            # change la deadline. à voir si ça change quelque chose. 
+            # Edit 30/10/2025 : Je pense qu'il faut ajouter une autre info de date due_date_for_schedule 
+            # qui est la date de fin qui permette de respecter le planning, mais qui pototiellement 
+            # peut être décaléer pour respecter la deadline du projet (en bougeant la tache planifiée)
+            # ça permettrait d'identifier la fonction les leviers d'actions.
 
-    # Frontière: tâches dont tous les enfants sont déjà posés (au départ: sinks)
-    placed = set(u for u, t in tasks.items() if t.proposed_scheduled is not None)
-    def all_children_placed(u: str) -> bool:
-        return all((c in placed) for c in children[u])
+    # Frontière: tâches dont tous les enfants sont déjà planifiés (au départ: tâches finales)
+    scheduled_tasks = set(task_id for task_id, task in tasks.items() if task.proposed_scheduled is not None)
+    def all_children_scheduled(task_id: str) -> bool:
+        return all((child_id in scheduled_tasks) for child_id in task_children[task_id])
 
-    frontier = {u for u, t in tasks.items() if t.status=="pending" and all_children_placed(u)}
+    scheduling_frontier = {task_id for task_id, task in tasks.items() if task.status=="pending" and all_children_scheduled(task_id)}
 
-    # Boucle de placement
-    while frontier:
-        # Tri de la frontière
-        def sort_key(u):
-            t = tasks[u]
+    # Boucle de planification
+    while scheduling_frontier:
+        # Tri de la frontière par priorité
+        def priority_sort_key(task_id):
+            task = tasks[task_id]
             # Contrainte logique d'abord (plus tôt = plus contraint)
-            ldd = t.last_due_date or dt.datetime.max
-            # Slack approx = distance à ldd
-            slack = (ldd - dt.datetime.now()).total_seconds() / 60.0 if t.last_due_date else 1e18
-            return (ldd, t.urgency, -t.est_min)
+            latest_due_date = task.last_due_date or dt.datetime.max
+            # Slack approx = distance à la date limite
+            time_slack = (latest_due_date - dt.datetime.now()).total_seconds() / 60.0 if task.last_due_date else 1e18
+            return (latest_due_date, task.urgency, -task.est_min)
 
-        candidates = sorted(frontier, key=sort_key)
-        u = candidates[0]
-        frontier.remove(u)
-        t = tasks[u]
+        priority_sorted_tasks = sorted(scheduling_frontier, key=priority_sort_key)
+        current_task_id = priority_sorted_tasks[0]
+        scheduling_frontier.remove(current_task_id)
+        current_task = tasks[current_task_id]
 
-        if t.proposed_scheduled is not None:
-            placed.add(u)
-            # Propager la contrainte vers les parents
-            for p in t.depends:
-                parent = tasks[p]
-                cand = t.proposed_scheduled - dt.timedelta(minutes=parent.est_min)
-                if parent.last_due_date is None or cand < parent.last_due_date:
-                    parent.last_due_date = cand
-                if parent.critical_due_date is None or cand < parent.critical_due_date:
-                    parent.critical_due_date = cand
-                # Si tous les enfants du parent sont posés, l'ajouter à la frontière
-                if all_children_placed(p):
-                    frontier.add(p)
+        if current_task.proposed_scheduled is not None:
+            scheduled_tasks.add(current_task_id)
+            # Propager la contrainte vers les tâches parentes
+            for parent_task_id in current_task.depends:
+                parent_task = tasks[parent_task_id]
+                parent_deadline_candidate = current_task.proposed_scheduled - dt.timedelta(minutes=parent_task.est_min)
+                if parent_task.last_due_date is None or parent_deadline_candidate < parent_task.last_due_date:
+                    parent_task.last_due_date = parent_deadline_candidate
+                # critical_due_date = fin de tâche parent = début + durée
+                parent_critical_end = parent_deadline_candidate + dt.timedelta(minutes=parent_task.est_min)
+                if parent_task.critical_due_date is None or parent_critical_end < parent_task.critical_due_date:
+                    parent_task.critical_due_date = parent_critical_end
+                # Si tous les enfants du parent sont planifiés, l'ajouter à la frontière
+                if all_children_scheduled(parent_task_id):
+                    scheduling_frontier.add(parent_task_id)
             continue
 
-        # Déterminer la date butoir de placement
-        deadline = t.critical_due_date or t.last_due_date
-        if deadline is None:
+        # Déterminer la date butoir de placement (début de tâche)
+        # Si critical_due_date existe, on calcule le début = fin - durée
+        if current_task.critical_due_date:
+            scheduling_deadline = current_task.critical_due_date - dt.timedelta(minutes=current_task.est_min)
+        else:
+            scheduling_deadline = current_task.last_due_date
+        if scheduling_deadline is None:
             # Si aucune contrainte, on se fixe une large fenêtre (maintenant + 180j)
-            deadline = dt.datetime.now() + dt.timedelta(days=180)
+            scheduling_deadline = dt.datetime.now() + dt.timedelta(days=180)
 
         # Capacité infinie ?
-        if t.pool == "ext" or t.assignee == "exterieur":
-            t.proposed_scheduled = deadline
-            t.critical_due_date = deadline
-            placed.add(u)
+        if current_task.pool == "ext" or current_task.assignee == "exterieur":
+            current_task.proposed_scheduled = scheduling_deadline
+            # critical_due_date = fin de tâche = début + durée
+            current_task.critical_due_date = scheduling_deadline + dt.timedelta(minutes=current_task.est_min)
+            scheduled_tasks.add(current_task_id)
         else:
-            cal = get_cal(t.pool, t.assignee)
-            start = cal.find_backward(deadline=deadline, minutes=t.est_min, allow_split=allow_split, gran_min=GRANULARITY_MIN)
-            if start is None:
-                # Échec: on remonte très en amont (conflit); on pose à défaut 1 an avant
-                start = deadline - dt.timedelta(minutes=t.est_min)
-                cal.reserve(start, start + dt.timedelta(minutes=t.est_min))
-            t.proposed_scheduled = start
-            t.critical_due_date = min(t.critical_due_date or start, start)
-            placed.add(u)
+            task_calendar = get_calendar(current_task.pool, current_task.assignee)
+            scheduled_start_time = task_calendar.find_backward(deadline=scheduling_deadline, minutes=current_task.est_min, allow_split=allow_split, gran_min=GRANULARITY_MIN)
+            if scheduled_start_time is None:
+                # Échec: on remonte très en amont (conflit); on pose à défaut avant la deadline
+                scheduled_start_time = scheduling_deadline - dt.timedelta(minutes=current_task.est_min)
+                task_calendar.reserve(scheduled_start_time, scheduled_start_time + dt.timedelta(minutes=current_task.est_min))
+            current_task.proposed_scheduled = scheduled_start_time
+            # critical_due_date = fin de tâche = début + durée
+            scheduled_end_time = scheduled_start_time + dt.timedelta(minutes=current_task.est_min)
+            current_task.critical_due_date = min(current_task.critical_due_date or scheduled_end_time, scheduled_end_time)
+            scheduled_tasks.add(current_task_id)
 
-        # Propager la contrainte aux parents
-        for p in t.depends:
-            parent = tasks[p]
-            cand = t.proposed_scheduled - dt.timedelta(minutes=parent.est_min)
-            if parent.last_due_date is None or cand < parent.last_due_date:
-                parent.last_due_date = cand
-            if parent.critical_due_date is None or cand < parent.critical_due_date:
-                parent.critical_due_date = cand
-            if all_children_placed(p):
-                frontier.add(p)
+        # Propager la contrainte aux tâches parentes
+        for parent_task_id in current_task.depends:
+            parent_task = tasks[parent_task_id]
+            parent_deadline_candidate = current_task.proposed_scheduled - dt.timedelta(minutes=parent_task.est_min)
+            if parent_task.last_due_date is None or parent_deadline_candidate < parent_task.last_due_date:
+                parent_task.last_due_date = parent_deadline_candidate
+            # critical_due_date = fin de tâche parent = début + durée
+            parent_critical_end = parent_deadline_candidate + dt.timedelta(minutes=parent_task.est_min)
+            if parent_task.critical_due_date is None or parent_critical_end < parent_task.critical_due_date:
+                parent_task.critical_due_date = parent_critical_end
+            if all_children_scheduled(parent_task_id):
+                scheduling_frontier.add(parent_task_id)
 
     # Fin: tout est placé ou verrouillé
 
