@@ -183,6 +183,47 @@ def round_down_to_granularity(d: dt.datetime, gran_min=GRANULARITY_MIN) -> dt.da
     rounded = (minutes // gran_min) * gran_min
     return d.replace(hour=0, minute=0, second=0, microsecond=0) + dt.timedelta(minutes=rounded)
 
+def align_to_workslots(d: dt.datetime, pool: str) -> dt.datetime:
+    """
+    Aligne une date/heure sur les plages de travail autorisées.
+    Si la date tombe en dehors des workslots, la décale à la fin du slot précédent.
+    """
+    if pool != "pro":
+        return d  # Pas de contrainte pour les autres pools
+    
+    day = d.date()
+    
+    # Si ce n'est pas un jour ouvré, recule au dernier jour ouvré
+    while not is_workday_pro(day):
+        day = day - dt.timedelta(days=1)
+    
+    # Obtenir les slots du jour
+    slots = slots_for_day_pro(day)
+    
+    # Vérifier si la date tombe dans un slot
+    for slot_start, slot_end in slots:
+        if slot_start <= d <= slot_end:
+            return d  # Déjà dans un slot valide
+    
+    # Si pas dans un slot, trouver le slot précédent le plus proche
+    target_datetime = dt.datetime.combine(day, d.time())
+    
+    # Parcourir les slots en ordre inverse pour trouver le dernier slot avant la date
+    for slot_start, slot_end in reversed(slots):
+        if slot_end <= target_datetime:
+            return slot_end
+    
+    # Si aucun slot avant sur ce jour, prendre le dernier slot du jour précédent
+    prev_day = day - dt.timedelta(days=1)
+    while not is_workday_pro(prev_day):
+        prev_day = prev_day - dt.timedelta(days=1)
+    
+    prev_slots = slots_for_day_pro(prev_day)
+    if prev_slots:
+        return prev_slots[-1][1]  # Fin du dernier slot du jour précédent
+    
+    return d  # Fallback
+
 def subtract_intervals(base: Tuple[dt.datetime, dt.datetime], occ: List[Tuple[dt.datetime, dt.datetime]]) -> List[Tuple[dt.datetime, dt.datetime]]:
     """Soustrait les intervalles occupés de base, retourne les intervalles libres (triés)."""
     start, end = base
@@ -220,70 +261,70 @@ class ResourceCalendar:
         Recherche le dernier placement possible avant 'deadline' pour 'minutes'.
         Retourne le début global. Place en interne (réserve).
         """
-        remaining = minutes
+        remaining_minutes = minutes
         placed_segments: List[Tuple[dt.datetime, dt.datetime]] = []
-        cursor = deadline
+        search_cursor = deadline
 
-        while remaining > 0:
-            day = cursor.date()
-            # Décrémente les jours jusqu’à un ouvré
-            while self.pool == "pro" and not is_workday_pro(day):
-                day = day - dt.timedelta(days=1)
-                cursor = dt.datetime.combine(day, dt.time(23, 59, 59))
+        while remaining_minutes > 0:
+            current_day = search_cursor.date()
+            # Décrémente les jours jusqu'à un ouvré
+            while self.pool == "pro" and not is_workday_pro(current_day):
+                current_day = current_day - dt.timedelta(days=1)
+                search_cursor = dt.datetime.combine(current_day, dt.time(23, 59, 59))
 
             # Slots jour (pro) ou un slot 24h (autre pool fini)
             if self.pool == "pro":
-                slots = slots_for_day_pro(day)
+                daily_slots = slots_for_day_pro(current_day)
             else:
                 # Pour d'autres pools bornés, on pourrait paramétrer ici
-                slots = [(dt.datetime.combine(day, dt.time(0, 0, 0)), dt.datetime.combine(day, dt.time(23, 59, 59)))]
+                daily_slots = [(dt.datetime.combine(current_day, dt.time(0, 0, 0)), dt.datetime.combine(current_day, dt.time(23, 59, 59)))]
 
             placed_today = False
             # Traite les slots du jour de la fin vers le début
-            for (s, e) in reversed(slots):
-                # Clip le slot à cursor
-                e2 = min(e, cursor)
-                if e2 <= s:
+            for (slot_start, slot_end) in reversed(daily_slots):
+                # Clip le slot à search_cursor
+                clipped_slot_end = min(slot_end, search_cursor)
+                if clipped_slot_end <= slot_start:
                     continue
                 # Intervalles libres dans ce slot
-                free = subtract_intervals((s, e2), self.occ)
+                free_intervals = subtract_intervals((slot_start, clipped_slot_end), self.occ)
                 # On parcourt du plus tard vers le plus tôt
-                for (fs, fe) in reversed(free):
+                for (free_start, free_end) in reversed(free_intervals):
                     # Aligner sur granularité
-                    fe = round_down_to_granularity(fe, gran_min)
-                    if fe <= fs:
+                    aligned_free_end = round_down_to_granularity(free_end, gran_min)
+                    if aligned_free_end <= free_start:
                         continue
-                    avail_min = int((fe - fs).total_seconds() // 60)
-                    if avail_min <= 0:
+                    available_minutes = int((aligned_free_end - free_start).total_seconds() // 60)
+                    if available_minutes <= 0:
                         continue
                     if allow_split:
-                        chunk = min(remaining, (avail_min // gran_min) * gran_min)
-                        if chunk <= 0:
+                        chunk_minutes = min(remaining_minutes, (available_minutes // gran_min) * gran_min)
+                        if chunk_minutes <= 0:
                             continue
-                        seg_start = fe - dt.timedelta(minutes=chunk)
-                        self.reserve(seg_start, fe)
-                        placed_segments.append((seg_start, fe))
-                        remaining -= chunk
-                        cursor = seg_start
+                        segment_start = aligned_free_end - dt.timedelta(minutes=chunk_minutes)
+                        self.reserve(segment_start, aligned_free_end)
+                        placed_segments.append((segment_start, aligned_free_end))
+                        remaining_minutes -= chunk_minutes
+                        search_cursor = segment_start
                         placed_today = True
-                        if remaining == 0:
+                        if remaining_minutes == 0:
                             # Retourner le plus petit start parmi les segments posés
-                            return min(st for (st, ed) in placed_segments)
+                            return min(start_time for (start_time, end_time) in placed_segments)
                     else:
                         # Un seul bloc contigu
-                        if avail_min >= remaining:
-                            seg_start = fe - dt.timedelta(minutes=remaining)
-                            self.reserve(seg_start, fe)
-                            placed_segments.append((seg_start, fe))
-                            remaining = 0
-                            return seg_start
+                        if available_minutes >= remaining_minutes:
+                            segment_start = aligned_free_end - dt.timedelta(minutes=remaining_minutes)
+                            self.reserve(segment_start, aligned_free_end)
+                            placed_segments.append((segment_start, aligned_free_end))
+                            remaining_minutes = 0
+                            return segment_start
                         # sinon on continue à chercher un plus grand segment
             # Si rien posé sur la journée, recule d'un jour
             if not placed_today:
-                day = day - dt.timedelta(days=1)
-                cursor = dt.datetime.combine(day, dt.time(23, 59, 59))
+                current_day = current_day - dt.timedelta(days=1)
+                search_cursor = dt.datetime.combine(current_day, dt.time(23, 59, 59))
 
-        return min(st for (st, ed) in placed_segments) if placed_segments else None
+        return min(start_time for (start_time, end_time) in placed_segments) if placed_segments else None
 
 # ========= Moteur de planification =========
 
@@ -347,6 +388,7 @@ def compute_last_due_dates(tasks: Dict[str, Task]) -> None:
 
 def schedule(tasks: Dict[str, Task], allow_split=True) -> None:
     """Place les tâches en backward en respectant la capacité."""
+    print("Début de la planification")
     # Calendriers par ressource
     resource_calendars: Dict[Tuple[str, str], ResourceCalendar] = {}
 
@@ -373,14 +415,15 @@ def schedule(tasks: Dict[str, Task], allow_split=True) -> None:
             lock_end_time = lock_start_time + dt.timedelta(minutes=task.est_min)
             get_calendar(task.pool, task.assignee).reserve(lock_start_time, lock_end_time)
             task.proposed_scheduled = lock_start_time
-            task.critical_due_date = lock_end_time
+            task.critical_due_date = align_to_workslots(lock_end_time, task.pool)
+            print("task description already scheduled", task.description)
             # Cette ligne était ajoutée par claude sonnet... je l'ai retiré pour ne pas perdre l'info
             # de quand la tache doit vraiment être faite. C'est pas parce qu'on a planifié plus tot que ça
             # change la deadline. à voir si ça change quelque chose. 
             # Edit 30/10/2025 : Je pense qu'il faut ajouter une autre info de date due_date_for_schedule 
-            # qui est la date de fin qui permette de respecter le planning, mais qui pototiellement 
-            # peut être décaléer pour respecter la deadline du projet (en bougeant la tache planifiée)
-            # ça permettrait d'identifier la fonction les leviers d'actions.
+            # qui est la date de fin qui permette de respecter le planning, mais qui potentiellement 
+            # peut être décalée pour respecter la deadline du projet (en bougeant la tache planifiée)
+            # ça permettrait d'identifier les leviers d'actions.
 
     # Frontière: tâches dont tous les enfants sont déjà planifiés (au départ: tâches finales)
     scheduled_tasks = set(task_id for task_id, task in tasks.items() if task.proposed_scheduled is not None)
@@ -389,6 +432,7 @@ def schedule(tasks: Dict[str, Task], allow_split=True) -> None:
 
     scheduling_frontier = {task_id for task_id, task in tasks.items() if task.status=="pending" and all_children_scheduled(task_id)}
 
+    print("Frontière de planification : ", scheduling_frontier)
     # Boucle de planification
     while scheduling_frontier:
         # Tri de la frontière par priorité
@@ -404,8 +448,12 @@ def schedule(tasks: Dict[str, Task], allow_split=True) -> None:
         current_task_id = priority_sorted_tasks[0]
         scheduling_frontier.remove(current_task_id)
         current_task = tasks[current_task_id]
+        print("current task description : ", current_task.description)
 
-        if current_task.proposed_scheduled is not None:
+        """
+        #Pour le moment ce block n'est pas utilisé, et je pense qu'il y a moyen de réutiliser le code de plus bas dans une seule sous fonction
+         if current_task.proposed_scheduled is not None:
+            print('entree dans schedule : ' + current_task.description)
             scheduled_tasks.add(current_task_id)
             # Propager la contrainte vers les tâches parentes
             for parent_task_id in current_task.depends:
@@ -413,43 +461,60 @@ def schedule(tasks: Dict[str, Task], allow_split=True) -> None:
                 parent_deadline_candidate = current_task.proposed_scheduled - dt.timedelta(minutes=parent_task.est_min)
                 if parent_task.last_due_date is None or parent_deadline_candidate < parent_task.last_due_date:
                     parent_task.last_due_date = parent_deadline_candidate
-                # critical_due_date = fin de tâche parent = début + durée
+                # critical_due_date = fin de tâche parent = début + durée (alignée sur workslots)
                 parent_critical_end = parent_deadline_candidate + dt.timedelta(minutes=parent_task.est_min)
+                parent_critical_end = align_to_workslots(parent_critical_end, parent_task.pool)
                 if parent_task.critical_due_date is None or parent_critical_end < parent_task.critical_due_date:
                     parent_task.critical_due_date = parent_critical_end
                 # Si tous les enfants du parent sont planifiés, l'ajouter à la frontière
                 if all_children_scheduled(parent_task_id):
                     scheduling_frontier.add(parent_task_id)
-            continue
+            continue 
+        #"""
 
+        #"""
+        #Ce block calcule la date butoire de placement, je pense qu'il doit être calculé à la fin à partir du critical_due_date
         # Déterminer la date butoir de placement (début de tâche)
         # Si critical_due_date existe, on calcule le début = fin - durée
+        print(" Calcul scheduling deadline")
         if current_task.critical_due_date:
             scheduling_deadline = current_task.critical_due_date - dt.timedelta(minutes=current_task.est_min)
+            print("description tache : ", current_task.description, "scheduling deadline : ", scheduling_deadline, "critical_due_date : ", current_task.critical_due_date, "est_min : ", current_task.est_min)
         else:
             scheduling_deadline = current_task.last_due_date
+            print("description tache : ", current_task.description, "scheduling deadline : ", scheduling_deadline, "last_due_date : ", current_task.last_due_date)
         if scheduling_deadline is None:
             # Si aucune contrainte, on se fixe une large fenêtre (maintenant + 180j)
             scheduling_deadline = dt.datetime.now() + dt.timedelta(days=180)
+            print("scheduling deadline : ", scheduling_deadline)
+        #"""
 
         # Capacité infinie ?
+        #Pour le moment on oublie la capcacité infinie on la remettra peut-être après
+        """
+        print("Capacité infinie ?")
         if current_task.pool == "ext" or current_task.assignee == "exterieur":
             current_task.proposed_scheduled = scheduling_deadline
-            # critical_due_date = fin de tâche = début + durée
-            current_task.critical_due_date = scheduling_deadline + dt.timedelta(minutes=current_task.est_min)
+            # critical_due_date = fin de tâche = début + durée (alignée sur workslots)
+            end_time = scheduling_deadline + dt.timedelta(minutes=current_task.est_min)
+            current_task.critical_due_date = align_to_workslots(end_time, current_task.pool)
             scheduled_tasks.add(current_task_id)
         else:
-            task_calendar = get_calendar(current_task.pool, current_task.assignee)
-            scheduled_start_time = task_calendar.find_backward(deadline=scheduling_deadline, minutes=current_task.est_min, allow_split=allow_split, gran_min=GRANULARITY_MIN)
-            if scheduled_start_time is None:
-                # Échec: on remonte très en amont (conflit); on pose à défaut avant la deadline
-                scheduled_start_time = scheduling_deadline - dt.timedelta(minutes=current_task.est_min)
-                task_calendar.reserve(scheduled_start_time, scheduled_start_time + dt.timedelta(minutes=current_task.est_min))
-            current_task.proposed_scheduled = scheduled_start_time
-            # critical_due_date = fin de tâche = début + durée
-            scheduled_end_time = scheduled_start_time + dt.timedelta(minutes=current_task.est_min)
-            current_task.critical_due_date = min(current_task.critical_due_date or scheduled_end_time, scheduled_end_time)
-            scheduled_tasks.add(current_task_id)
+        #"""
+        
+        task_calendar = get_calendar(current_task.pool, current_task.assignee)
+        scheduled_start_time = task_calendar.find_backward(deadline=scheduling_deadline, minutes=current_task.est_min, allow_split=allow_split, gran_min=GRANULARITY_MIN)
+        if scheduled_start_time is None:
+            # Échec: on remonte très en amont (conflit); on pose à défaut avant la deadline
+            scheduled_start_time = scheduling_deadline - dt.timedelta(minutes=current_task.est_min)
+            task_calendar.reserve(scheduled_start_time, scheduled_start_time + dt.timedelta(minutes=current_task.est_min))
+        
+        current_task.proposed_scheduled = scheduled_start_time
+        # critical_due_date = fin de tâche = début + durée (alignée sur workslots)
+        scheduled_end_time = scheduled_start_time + dt.timedelta(minutes=current_task.est_min)
+        scheduled_end_time = align_to_workslots(scheduled_end_time, current_task.pool)
+        current_task.critical_due_date = min(current_task.critical_due_date or scheduled_end_time, scheduled_end_time)
+        scheduled_tasks.add(current_task_id)
 
         # Propager la contrainte aux tâches parentes
         for parent_task_id in current_task.depends:
@@ -457,8 +522,9 @@ def schedule(tasks: Dict[str, Task], allow_split=True) -> None:
             parent_deadline_candidate = current_task.proposed_scheduled - dt.timedelta(minutes=parent_task.est_min)
             if parent_task.last_due_date is None or parent_deadline_candidate < parent_task.last_due_date:
                 parent_task.last_due_date = parent_deadline_candidate
-            # critical_due_date = fin de tâche parent = début + durée
+            # critical_due_date = fin de tâche parent = début + durée (alignée sur workslots)
             parent_critical_end = parent_deadline_candidate + dt.timedelta(minutes=parent_task.est_min)
+            parent_critical_end = align_to_workslots(parent_critical_end, parent_task.pool)
             if parent_task.critical_due_date is None or parent_critical_end < parent_task.critical_due_date:
                 parent_task.critical_due_date = parent_critical_end
             if all_children_scheduled(parent_task_id):
@@ -535,7 +601,7 @@ def main():
         print("Aucune tâche éligible trouvée.", file=sys.stderr)
         sys.exit(1)
 
-    compute_last_due_dates(tasks)
+    # compute_last_due_dates(tasks)
     schedule(tasks, allow_split=not args.no_split)
     print_report(tasks)
 
