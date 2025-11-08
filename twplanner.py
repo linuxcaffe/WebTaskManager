@@ -13,7 +13,9 @@ from typing import Dict, List, Optional, Tuple
 from tabulate import tabulate
 
 # Import des modèles de données
-from models import TimeSlot, PoolCalendar, Task, parse_duration_to_minutes, parse_tw_datetime
+import TWTime
+from TWCalendar import PoolCalendar
+from TWTask import Task
 
 # ========= Configuration calendrier =========
 GRANULARITY_MIN = 30  # split autorisé uniquement par 30 min
@@ -23,118 +25,12 @@ NUDGE_THRESHOLD_MIN = 60 * 24  # 1 jour
 # Format: {assignee: {pool: {jour_semaine: [(heure_debut, heure_fin), ...]}}}
 # jour_semaine: 0=Lundi, 1=Mardi, 2=Mercredi, 3=Jeudi, 4=Vendredi, 5=Samedi, 6=Dimanche
 
-def get_default_calendar(assignee: str = "default") -> Dict[str, PoolCalendar]:
-    """
-    Retourne le calendrier par défaut pour un assignee.
-    
-    Args:
-        assignee: Nom de l'assignee (pour l'instant un seul calendrier par défaut)
-    
-    Returns:
-        Dictionnaire {pool_name: PoolCalendar}
-    """
-    calendars = {}
-    
-    # SLEEP: tous les jours de 00:00 à 08:00 et de 22:00 à 23:59
-    sleep_slots = {}
-    for day in range(7):  # 0=Lundi à 6=Dimanche
-        sleep_slots[day] = [
-            TimeSlot("00:00", "08:00"),
-            TimeSlot("22:00", "23:59")
-        ]
-    calendars["sleep"] = PoolCalendar("sleep", sleep_slots)
-    
-    # PRO: 8:00-12:00 et 14:00-18:00 (sauf mercredi et vendredi: 16h)
-    pro_slots = {}
-    for day in range(7):
-        if day == 2:  # Mercredi (0=Lundi, 2=Mercredi)
-            pro_slots[day] = [
-                TimeSlot("09:00", "12:00"),
-                TimeSlot("14:00", "16:00")
-            ]
-        elif day == 4:  # Vendredi
-            pro_slots[day] = [
-                TimeSlot("09:00", "12:00"),
-                TimeSlot("14:00", "16:00")
-            ]
-        elif day in [0, 1, 3]:  # Lundi, Mardi, Jeudi
-            pro_slots[day] = [
-                TimeSlot("09:00", "12:00"),
-                TimeSlot("14:00", "18:00")
-            ]
-        # Pas de créneaux pro le week-end (5=Samedi, 6=Dimanche)
-    calendars["pro"] = PoolCalendar("pro", pro_slots)
-    
-    # ASSO: Mardi 18:00-20:00 et Mercredi 16:00-20:00
-    asso_slots = {
-        1: [TimeSlot("18:00", "20:00")],  # Mardi
-        2: [TimeSlot("16:00", "20:00")]   # Mercredi
-    }
-    calendars["asso"] = PoolCalendar("asso", asso_slots)
-    
-    # PERSO: pas besoin de planifier explicitement (c'est le reste du temps)
-    # On peut le laisser vide ou ne pas le définir
-    calendars["perso"] = PoolCalendar("perso", {})
-    
-    return calendars
-
 # Stockage global des calendriers par assignee
 CALENDARS_BY_ASSIGNEE: Dict[str, Dict[str, PoolCalendar]] = {
-    "default": get_default_calendar("default")
+    "default": PoolCalendar.get_default_calendars("default")
 }
 
 # ========= Utilitaires calendrier =========
-
-def time_to_minutes(time_str: str) -> int:
-    """Convertit une heure au format HH:MM en minutes depuis minuit."""
-    hours, minutes = map(int, time_str.split(":"))
-    return hours * 60 + minutes
-
-def minutes_to_time(minutes: int) -> str:
-    """Convertit des minutes depuis minuit en format HH:MM."""
-    hours = minutes // 60
-    mins = minutes % 60
-    return f"{hours:02d}:{mins:02d}"
-
-def get_available_slots_for_day(date: dt.datetime, pool: str, assignee: str = "default") -> List[Tuple[dt.datetime, dt.datetime]]:
-    """
-    Retourne les créneaux disponibles pour un jour donné, un pool et un assignee.
-    
-    Args:
-        date: Date pour laquelle chercher les créneaux
-        pool: Nom du pool (pro, asso, perso, sleep)
-        assignee: Nom de l'assignee
-    
-    Returns:
-        Liste de tuples (datetime_debut, datetime_fin) représentant les créneaux disponibles
-    """
-    # Récupérer le calendrier de l'assignee
-    if assignee not in CALENDARS_BY_ASSIGNEE:
-        assignee = "default"
-    
-    calendars = CALENDARS_BY_ASSIGNEE[assignee]
-    
-    if pool not in calendars:
-        return []
-    
-    pool_calendar = calendars[pool]
-    day_of_week = date.weekday()  # 0=Lundi, 6=Dimanche
-    
-    if day_of_week not in pool_calendar.weekly_slots:
-        return []
-    
-    # Convertir les TimeSlots en datetime
-    available_slots = []
-    for slot in pool_calendar.weekly_slots[day_of_week]:
-        start_minutes = time_to_minutes(slot.start_time)
-        end_minutes = time_to_minutes(slot.end_time)
-        
-        start_dt = date.replace(hour=start_minutes // 60, minute=start_minutes % 60, second=0, microsecond=0)
-        end_dt = date.replace(hour=end_minutes // 60, minute=end_minutes % 60, second=0, microsecond=0)
-        
-        available_slots.append((start_dt, end_dt))
-    
-    return available_slots
 
 def get_available_slots_in_range(start_date: dt.datetime, end_date: dt.datetime, pool: str, assignee: str = "default") -> List[Tuple[dt.datetime, dt.datetime]]:
     """
@@ -152,8 +48,16 @@ def get_available_slots_in_range(start_date: dt.datetime, end_date: dt.datetime,
     all_slots = []
     current_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
     
+    # Récupérer le calendrier du pool
+    if assignee not in CALENDARS_BY_ASSIGNEE:
+        assignee = "default"
+    calendars = CALENDARS_BY_ASSIGNEE[assignee]
+    if pool not in calendars:
+        return []
+    pool_calendar = calendars[pool]
+    
     while current_date <= end_date:
-        day_slots = get_available_slots_for_day(current_date, pool, assignee)
+        day_slots = pool_calendar.get_slots_for_day(current_date)
         
         # Filtrer les créneaux qui sont dans la plage demandée
         for slot_start, slot_end in day_slots:
@@ -199,12 +103,6 @@ def can_schedule_task(task: Task, start_time: dt.datetime, assignee: str = "defa
 
 # ========= Utilitaires de parsing =========
 
-def fmt_tw_datetime_local(d: Optional[dt.datetime]) -> Optional[str]:
-    """Format pour `task ... modify UDA=...` (ISO local, sans timezone)."""
-    if d is None:
-        return None
-    return d.strftime("%Y-%m-%dT%H:%M:%S")
-
 # ========= Lecture Taskwarrior =========
 
 def tw_export(project: str) -> List[dict]:
@@ -230,11 +128,11 @@ def load_tasks_from_tw(project: str) -> Dict[str, Task]:
             else:
                 # Handle other types by converting to string first
                 depends = [str(dep).strip()] if str(dep).strip() else []
-        due = parse_tw_datetime(t.get("due"))
-        scheduled_lock = parse_tw_datetime(t.get("scheduled"))  # verrou
+        due = TWTime.parse_tw_datetime(t.get("due"))
+        scheduled_lock = TWTime.parse_tw_datetime(t.get("scheduled"))  # verrou
         # UDA
         uda = t.get("uda", {})
-        est = parse_duration_to_minutes(uda.get("estTime") or t.get("estTime"))
+        est = TWTime.parse_duration_to_minutes(uda.get("estTime") or t.get("estTime"))
         assignee = uda.get("assignee") or t.get("assignee") or ""
         pool = uda.get("pool") or t.get("pool") or "pro"
         urgency = float(t.get("urgency", 0))
@@ -249,26 +147,26 @@ def load_tasks_from_tw(project: str) -> Dict[str, Task]:
 
 def print_report(tasks: Dict[str, Task]) -> None:
     rows = []
-    for t in tasks.values():
-        if t.status != "pending":
+    for current_task in tasks.values():
+        if current_task.status != "pending":
             continue
         nudge = None
         # Utiliser due au lieu de last_due_date qui n'existe pas
-        if t.due and t.proposed_scheduled:
-            delta_min = int((t.due - t.proposed_scheduled).total_seconds() // 60)
+        if current_task.due and current_task.proposed_scheduled:
+            delta_min = int((current_task.due - current_task.proposed_scheduled).total_seconds() // 60)
             if delta_min > NUDGE_THRESHOLD_MIN:
                 nudge = f"{delta_min//60}h"
         rows.append([
-            t.description,
-            t.assignee or "-",
-            t.pool,
-            t.est_min,
-            f"{t.urgency:.2f}",
-            fmt_tw_datetime_local(t.due) or "",
-            fmt_tw_datetime_local(t.scheduled_lock) or "",
-            fmt_tw_datetime_local(t.scheduled_due_date) or "",
-            fmt_tw_datetime_local(t.critical_due_date) or "",
-            fmt_tw_datetime_local(t.proposed_scheduled) or "",
+            current_task.description,
+            current_task.assignee or "-",
+            current_task.pool,
+            current_task.est_min,
+            f"{current_task.urgency:.2f}",
+            TWTime.fmt_tw_datetime_local(current_task.due) or "",
+            TWTime.fmt_tw_datetime_local(current_task.scheduled_lock) or "",
+            TWTime.fmt_tw_datetime_local(current_task.scheduled_due_date) or "",
+            TWTime.fmt_tw_datetime_local(current_task.critical_due_date) or "",
+            TWTime.fmt_tw_datetime_local(current_task.proposed_scheduled) or "",
             nudge or ""
         ])
     
@@ -335,8 +233,8 @@ def test_task_from_uuid():
         print(f"Assignee: {task.assignee or 'Non assigné'}")
         print(f"Pool: {task.pool}")
         print(f"Estimation (min): {task.est_min}")
-        print(f"Due date: {fmt_tw_datetime_local(task.due) or 'Non définie'}")
-        print(f"Scheduled: {fmt_tw_datetime_local(task.scheduled_lock) or 'Non définie'}")
+        print(f"Due date: {TWTime.fmt_tw_datetime_local(task.due) or 'Non définie'}")
+        print(f"Scheduled: {TWTime.fmt_tw_datetime_local(task.scheduled_lock) or 'Non définie'}")
         print(f"Urgency: {task.urgency}")
         print(f"Dépendances: {task.depends}")
         
@@ -360,12 +258,20 @@ def test_task_from_uuid():
         if is_in_slot is None:
             print("La tâche n'a pas de date due définie.")
         elif is_in_slot:
-            print(f"✓ La date due ({fmt_tw_datetime_local(task.due)}) tombe DANS une plage horaire du pool '{task.pool}'")
+            print(f"✓ La date due ({TWTime.fmt_tw_datetime_local(task.due)}) tombe DANS une plage horaire du pool '{task.pool}'")
         else:
-            print(f"✗ La date due ({fmt_tw_datetime_local(task.due)}) tombe HORS des plages horaires du pool '{task.pool}'")
+            print(f"✗ La date due ({TWTime.fmt_tw_datetime_local(task.due)}) tombe HORS des plages horaires du pool '{task.pool}'")
             # Afficher les plages disponibles pour ce jour
             if task.due:
-                slots = get_available_slots_for_day(task.due, task.pool, task.assignee or "default")
+                assignee = task.assignee or "default"
+                if assignee not in CALENDARS_BY_ASSIGNEE:
+                    assignee = "default"
+                calendars = CALENDARS_BY_ASSIGNEE[assignee]
+                if task.pool in calendars:
+                    pool_calendar = calendars[task.pool]
+                    slots = pool_calendar.get_slots_for_day(task.due)
+                else:
+                    slots = []
                 if slots:
                     print(f"  Plages disponibles pour le {task.due.strftime('%A %Y-%m-%d')} :")
                     for slot_start, slot_end in slots:
@@ -373,26 +279,26 @@ def test_task_from_uuid():
                 else:
                     print(f"  Aucune plage disponible pour le pool '{task.pool}' ce jour-là.")
         
-        print("\n==== Test calculate_critical_due_date() ====")
+        print("\n==== Test get_previous_slot_end() ====")
         
-        # Calculer la critical_due_date
-        critical_due = task.calculate_critical_due_date()
+        # Calculer la fin du créneau précédent
+        previous_slot_end = task.get_previous_slot_end()
         
-        if critical_due is None:
-            print("Impossible de calculer la critical_due_date (pas de date due ou pas de créneau trouvé).")
+        if previous_slot_end is None:
+            print("Impossible de trouver un créneau précédent (pas de date due ou pas de créneau trouvé).")
         else:
-            print(f"Critical due date calculée: {fmt_tw_datetime_local(critical_due)}")
+            print(f"Fin du créneau précédent: {TWTime.fmt_tw_datetime_local(previous_slot_end)}")
             
-            if task.due and critical_due != task.due:
-                time_diff = (task.due - critical_due).total_seconds() / 60
+            if task.due and previous_slot_end != task.due:
+                time_diff = (task.due - previous_slot_end).total_seconds() / 60
                 print(f"Différence avec la date due: {int(time_diff)} minutes ({time_diff/60:.1f} heures)")
-                print(f"→ La tâche doit être terminée avant {critical_due.strftime('%A %Y-%m-%d à %H:%M')}")
+                print(f"→ La tâche doit être terminée avant {previous_slot_end.strftime('%A %Y-%m-%d à %H:%M')}")
             else:
                 print("La date due est déjà dans un créneau du pool, pas d'ajustement nécessaire.")
         
         # Assigner la critical_due_date à la tâche
         task.set_critical_due_date()
-        print(f"\nCritical due date assignée à la tâche: {fmt_tw_datetime_local(task.critical_due_date)}")
+        print(f"\nCritical due date assignée à la tâche: {TWTime.fmt_tw_datetime_local(task.critical_due_date)}")
     else:
         print(f"Aucune tâche trouvée avec l'UUID: {test_uuid}")
     
@@ -416,7 +322,12 @@ def test_calendar_slots():
             test_date = start_date + dt.timedelta(days=day_offset)
             day_name = days[day_offset]
             
-            slots = get_available_slots_for_day(test_date, pool)
+            # Récupérer le calendrier du pool
+            if pool in CALENDARS_BY_ASSIGNEE["default"]:
+                pool_calendar = CALENDARS_BY_ASSIGNEE["default"][pool]
+                slots = pool_calendar.get_slots_for_day(test_date)
+            else:
+                slots = []
             
             if slots:
                 print(f"{day_name} ({test_date.strftime('%Y-%m-%d')}):")
