@@ -165,15 +165,95 @@ def load_tasks_from_tw(project: str) -> Dict[str, Task]:
         )
     return tasks
 
+def task_from_uuid(uuid: str) -> Optional[Task]:
+    """
+    Récupère une tâche spécifique par son UUID en utilisant la commande 'task [uuid]'.
+    
+    Args:
+        uuid: L'UUID de la tâche à récupérer
+    
+    Returns:
+        L'objet Task correspondant ou None si non trouvé
+    """
+    try:
+        # Utiliser la commande task avec l'UUID spécifique
+        cmd = ["task", uuid, "rc.verbose=nothing", "export"]
+        out = subprocess.check_output(cmd, text=True)
+        data = json.loads(out or "[]")
+        
+        if not data:
+            return None
+        
+        # Prendre la première tâche (il ne devrait y en avoir qu'une)
+        t = data[0]
+        
+        # Parser les données comme dans load_tasks_from_tw
+        desc = t.get("description", "")
+        proj = t.get("project", "")
+        depends = []
+        dep = t.get("depends")
+        if dep:
+            if isinstance(dep, str):
+                depends = [d.strip() for d in dep.split(",") if d.strip()]
+            elif isinstance(dep, list):
+                depends = [str(d).strip() for d in dep if str(d).strip()]
+            else:
+                depends = [str(dep).strip()] if str(dep).strip() else []
+        
+        due = parse_tw_datetime(t.get("due"))
+        scheduled_lock = parse_tw_datetime(t.get("scheduled"))
+        
+        # UDA
+        uda = t.get("uda", {})
+        est = parse_duration_to_minutes(uda.get("estTime") or t.get("estTime"))
+        assignee = uda.get("assignee") or t.get("assignee") or ""
+        pool = uda.get("pool") or t.get("pool") or "pro"
+        urgency = float(t.get("urgency", 0))
+        status = t.get("status", "pending")
+        
+        return Task(
+            uuid=uuid, description=desc, project=proj, depends=depends,
+            due=due, scheduled_lock=scheduled_lock, est_min=est,
+            assignee=assignee, pool=pool, urgency=urgency, status=status
+        )
+        
+    except subprocess.CalledProcessError:
+        # La commande a échoué (tâche non trouvée ou autre erreur)
+        return None
+    except (json.JSONDecodeError, KeyError, IndexError):
+        # Erreur de parsing JSON ou données manquantes
+        return None
+
+def get_task_dependencies(task: Task) -> Dict[str, Task]:
+    """
+    Récupère toutes les tâches dont la tâche donnée dépend.
+    
+    Args:
+        task: L'objet Task pour lequel récupérer les dépendances
+    
+    Returns:
+        Dictionnaire des tâches dépendantes (uuid -> Task)
+    """
+    dependencies = {}
+    
+    # Parcourir tous les UUIDs de dépendances
+    for dep_uuid in task.depends:
+        # Récupérer chaque tâche dépendante
+        dep_task = task_from_uuid(dep_uuid)
+        if dep_task:
+            dependencies[dep_uuid] = dep_task
+    
+    return dependencies
+
 def print_report(tasks: Dict[str, Task]) -> None:
-    print("\n=== TWPlanner Simulation ===")
     rows = []
     for t in tasks.values():
         if t.status != "pending":
             continue
         nudge = None
-        if t.last_due_date and t.proposed_scheduled:
-            delta_min = int((t.last_due_date - t.proposed_scheduled).total_seconds() // 60)
+        # Utiliser due au lieu de last_due_date qui n'existe pas
+        if t.due and t.proposed_scheduled:
+            delta_min = int((t.due - t.proposed_scheduled).total_seconds() // 60)
             if delta_min > NUDGE_THRESHOLD_MIN:
                 nudge = f"{delta_min//60}h"
         rows.append([
@@ -181,21 +261,103 @@ def print_report(tasks: Dict[str, Task]) -> None:
             t.assignee or "-",
             t.pool,
             t.est_min,
-            fmt_tw_datetime_local(t.last_due_date) or "",
+            f"{t.urgency:.2f}",
+            fmt_tw_datetime_local(t.due) or "",
+            fmt_tw_datetime_local(t.scheduled_lock) or "",
+            fmt_tw_datetime_local(t.scheduled_due_date) or "",
             fmt_tw_datetime_local(t.critical_due_date) or "",
             fmt_tw_datetime_local(t.proposed_scheduled) or "",
             nudge or ""
         ])
     
     # Affichage avec tabulate pour un rendu propre avec séparateurs alignés
-    headers = ["Tâche", "Assignee", "Pool", "Durée(min)", "last_due_date", "critical_due_date", "proposed_scheduled", "Nudge"]
+    headers = ["Tâche", "Assignee", "Pool", "Durée(min)", "Urgency", "Due", "Scheduled", "Scheduled_Due", "Critical_Due", "Proposed", "Nudge"]
     if rows:
         print(tabulate(rows, headers=headers, tablefmt="grid"))
     else:
         print("Aucune tâche à afficher.")
-    print("=== Fin ===\n")
+    
 
-def main():
+def test_calculate_due_date():
+    """
+    Fonction de test qui collecte toutes les tâches ayant une date d'échéance
+    (due, scheduled, scheduled_due_date, ou critical_due_date) et les affiche.
+    """
+    print("==== Test Calculate Due Date ====")
+    
+    # Charger toutes les tâches du projet
+    tasks = load_tasks_from_tw("TEST.TWPlanner")
+    
+    # Filtrer les tâches qui ont au moins une date d'échéance définie
+    tasks_with_due_dates = {}
+    
+    for uuid, task in tasks.items():
+        has_due_date = (
+            task.due is not None or
+            task.scheduled_lock is not None or
+            task.scheduled_due_date is not None or
+            task.critical_due_date is not None
+        )
+        
+        if has_due_date:
+            tasks_with_due_dates[uuid] = task
+    
+    print(f"Nombre de tâches avec dates d'échéance: {len(tasks_with_due_dates)}")
+    
+    # Afficher les tâches avec print_report
+    if tasks_with_due_dates:
+        print_report(tasks_with_due_dates)
+    else:
+        print("Aucune tâche avec date d'échéance trouvée.")
+    
+    print("==== Fin du test ====\n")
+
+def test_task_from_uuid():
+    """
+    Fonction de test pour récupérer une tâche spécifique par UUID
+    et tester la fonction get_task_dependencies.
+    """
+    test_uuid = "d3805c24-52a3-4cc1-b20f-0518dab2110d"
+    
+    print(f"==== Test récupération tâche UUID: {test_uuid} ====")
+    
+    # Récupérer la tâche par UUID
+    task = task_from_uuid(test_uuid)
+    
+    if task:
+        print(f"Tâche trouvée !")
+        print(f"UUID: {task.uuid}")
+        print(f"Description: {task.description}")
+        print(f"Projet: {task.project}")
+        print(f"Status: {task.status}")
+        print(f"Assignee: {task.assignee or 'Non assigné'}")
+        print(f"Pool: {task.pool}")
+        print(f"Estimation (min): {task.est_min}")
+        print(f"Due date: {fmt_tw_datetime_local(task.due) or 'Non définie'}")
+        print(f"Scheduled: {fmt_tw_datetime_local(task.scheduled_lock) or 'Non définie'}")
+        print(f"Urgency: {task.urgency}")
+        print(f"Dépendances: {task.depends}")
+        
+        print("\n==== Test get_task_dependencies ====")
+        
+        # Récupérer les dépendances
+        dependencies = get_task_dependencies(task)
+        
+        if dependencies:
+            print(f"Nombre de dépendances trouvées: {len(dependencies)}")
+            print("Affichage des tâches dépendantes avec print_report:")
+            print_report(dependencies)
+        else:
+            print("Aucune dépendance trouvée pour cette tâche.")
+    else:
+        print(f"Aucune tâche trouvée avec l'UUID: {test_uuid}")
+    
+    print("==== Fin du test UUID ====\n")
+
+
+
+#pour plus tard
+def main_plannificateur():
     parser = argparse.ArgumentParser(description="TWPlanner - Backward scheduler (MVP)")
     parser.add_argument("--project", required=True, help="Nom du projet Taskwarrior (ex: TEST.TWPlanner)")
     parser.add_argument("--simulate", action="store_true", help="Simulation (n'écrit pas dans TW)")
@@ -215,6 +377,7 @@ def main():
         print("Aucune tâche éligible trouvée.", file=sys.stderr)
         sys.exit(1)
 
+    
 
     print_report(tasks)
 
@@ -223,4 +386,4 @@ def main():
         print("Mises à jour appliquées dans Taskwarrior.")
 
 if __name__ == "__main__":
-    main()
+    test_task_from_uuid()
