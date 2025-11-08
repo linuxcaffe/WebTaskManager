@@ -49,17 +49,17 @@ def get_default_calendar(assignee: str = "default") -> Dict[str, PoolCalendar]:
     for day in range(7):
         if day == 2:  # Mercredi (0=Lundi, 2=Mercredi)
             pro_slots[day] = [
-                TimeSlot("08:00", "12:00"),
+                TimeSlot("09:00", "12:00"),
                 TimeSlot("14:00", "16:00")
             ]
         elif day == 4:  # Vendredi
             pro_slots[day] = [
-                TimeSlot("08:00", "12:00"),
+                TimeSlot("09:00", "12:00"),
                 TimeSlot("14:00", "16:00")
             ]
         elif day in [0, 1, 3]:  # Lundi, Mardi, Jeudi
             pro_slots[day] = [
-                TimeSlot("08:00", "12:00"),
+                TimeSlot("09:00", "12:00"),
                 TimeSlot("14:00", "18:00")
             ]
         # Pas de créneaux pro le week-end (5=Samedi, 6=Dimanche)
@@ -351,6 +351,48 @@ def test_task_from_uuid():
             print_report(dependencies)
         else:
             print("Aucune dépendance trouvée pour cette tâche.")
+        
+        print("\n==== Test is_due_in_pool_slot() ====")
+        
+        # Vérifier si la date due est dans une plage du pool
+        is_in_slot = task.is_due_in_pool_slot()
+        
+        if is_in_slot is None:
+            print("La tâche n'a pas de date due définie.")
+        elif is_in_slot:
+            print(f"✓ La date due ({fmt_tw_datetime_local(task.due)}) tombe DANS une plage horaire du pool '{task.pool}'")
+        else:
+            print(f"✗ La date due ({fmt_tw_datetime_local(task.due)}) tombe HORS des plages horaires du pool '{task.pool}'")
+            # Afficher les plages disponibles pour ce jour
+            if task.due:
+                slots = get_available_slots_for_day(task.due, task.pool, task.assignee or "default")
+                if slots:
+                    print(f"  Plages disponibles pour le {task.due.strftime('%A %Y-%m-%d')} :")
+                    for slot_start, slot_end in slots:
+                        print(f"    - {slot_start.strftime('%H:%M')} à {slot_end.strftime('%H:%M')}")
+                else:
+                    print(f"  Aucune plage disponible pour le pool '{task.pool}' ce jour-là.")
+        
+        print("\n==== Test calculate_critical_due_date() ====")
+        
+        # Calculer la critical_due_date
+        critical_due = task.calculate_critical_due_date()
+        
+        if critical_due is None:
+            print("Impossible de calculer la critical_due_date (pas de date due ou pas de créneau trouvé).")
+        else:
+            print(f"Critical due date calculée: {fmt_tw_datetime_local(critical_due)}")
+            
+            if task.due and critical_due != task.due:
+                time_diff = (task.due - critical_due).total_seconds() / 60
+                print(f"Différence avec la date due: {int(time_diff)} minutes ({time_diff/60:.1f} heures)")
+                print(f"→ La tâche doit être terminée avant {critical_due.strftime('%A %Y-%m-%d à %H:%M')}")
+            else:
+                print("La date due est déjà dans un créneau du pool, pas d'ajustement nécessaire.")
+        
+        # Assigner la critical_due_date à la tâche
+        task.set_critical_due_date()
+        print(f"\nCritical due date assignée à la tâche: {fmt_tw_datetime_local(task.critical_due_date)}")
     else:
         print(f"Aucune tâche trouvée avec l'UUID: {test_uuid}")
     

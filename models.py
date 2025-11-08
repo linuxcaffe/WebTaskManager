@@ -236,3 +236,86 @@ class Task:
         
         # Vérifier si on a assez de temps disponible
         return total_available_minutes >= self.est_min
+
+    def is_due_in_pool_slot(self) -> bool:
+        """
+        Vérifie si la date due de cette tâche tombe dans une plage horaire 
+        correspondant à son pool.
+        
+        Returns:
+            True si la date due est dans une plage du pool, False sinon
+            None si la tâche n'a pas de date due
+        """
+        if self.due is None:
+            return None
+        
+        # Import local pour éviter les dépendances circulaires
+        from twplanner import get_available_slots_for_day
+        
+        assignee = self.assignee or "default"
+        
+        # Récupérer les créneaux disponibles pour le jour de la date due
+        slots = get_available_slots_for_day(self.due, self.pool, assignee)
+        
+        # Vérifier si la date due tombe dans un des créneaux
+        for slot_start, slot_end in slots:
+            if slot_start <= self.due <= slot_end:
+                return True
+        
+        return False
+
+    def calculate_critical_due_date(self) -> Optional[dt.datetime]:
+        """
+        Calcule la critical_due_date : la fin du dernier créneau du pool avant la date due.
+        Si la date due est déjà dans un créneau du pool, retourne la date due elle-même.
+        
+        Returns:
+            La fin du dernier créneau avant la date due, ou None si pas de date due
+        """
+        if self.due is None:
+            return None
+        
+        # Import local pour éviter les dépendances circulaires
+        from twplanner import get_available_slots_for_day
+        
+        assignee = self.assignee or "default"
+        
+        # Vérifier si la date due est déjà dans un créneau
+        if self.is_due_in_pool_slot():
+            return self.due
+        
+        # Chercher le dernier créneau avant la date due
+        # On commence par le jour de la date due et on remonte dans le temps
+        current_date = self.due.replace(hour=0, minute=0, second=0, microsecond=0)
+        max_days_back = 30  # Limite de recherche : 30 jours en arrière
+        
+        last_slot_end = None
+        
+        for days_back in range(max_days_back):
+            check_date = current_date - dt.timedelta(days=days_back)
+            slots = get_available_slots_for_day(check_date, self.pool, assignee)
+            
+            # Parcourir les créneaux de ce jour
+            for slot_start, slot_end in slots:
+                # Ne considérer que les créneaux qui se terminent avant la date due
+                if slot_end < self.due:
+                    # Garder le créneau le plus proche (le plus récent)
+                    if last_slot_end is None or slot_end > last_slot_end:
+                        last_slot_end = slot_end
+            
+            # Si on a trouvé un créneau dans ce jour, on peut s'arrêter
+            # (car on cherche le plus proche)
+            if last_slot_end is not None and days_back == 0:
+                break
+            
+            # Si on a trouvé un créneau dans un jour précédent, on s'arrête
+            if last_slot_end is not None and days_back > 0:
+                break
+        
+        return last_slot_end
+
+    def set_critical_due_date(self) -> None:
+        """
+        Calcule et assigne la critical_due_date pour cette tâche.
+        """
+        self.critical_due_date = self.calculate_critical_due_date()
