@@ -101,6 +101,122 @@ def can_schedule_task(task: Task, start_time: dt.datetime, assignee: str = "defa
     # Vérifier si on a assez de temps disponible
     return total_available_minutes >= task.est_min
 
+def get_previous_free_slot(
+    date: dt.datetime, 
+    pool: str, 
+    assignee: str = "default",
+    min_duration: int = 0,
+    max_days_back: int = 30
+) -> Optional[Tuple[dt.datetime, dt.datetime]]:
+    """
+    Trouve le dernier créneau libre avant une date donnée pour un pool spécifique.
+    
+    Cette fonction combine les créneaux théoriques du calendrier avec les tâches
+    planifiées pour trouver un créneau réellement disponible.
+    
+    Args:
+        date: Date de référence (cherche avant cette date)
+        pool: Nom du pool (pro, asso, sleep, perso)
+        assignee: Nom de l'assignee
+        min_duration: Durée minimale requise en minutes (0 = n'importe quelle durée)
+        max_days_back: Nombre maximum de jours à remonter dans le temps
+    
+    Returns:
+        Tuple (datetime_debut, datetime_fin) du créneau libre trouvé, ou None si aucun
+    """
+    # Récupérer le calendrier du pool
+    if assignee not in CALENDARS_BY_ASSIGNEE:
+        assignee = "default"
+    calendars = CALENDARS_BY_ASSIGNEE[assignee]
+    
+    if pool not in calendars:
+        return None
+    
+    pool_calendar = calendars[pool]
+    
+    # Récupérer toutes les tâches planifiées pour ce pool et cet assignee
+    # On cherche les tâches avec scheduled_lock défini
+    try:
+        cmd = ["task", f"pool:{pool}", "status:pending", "scheduled.any:", "rc.verbose=nothing", "export"]
+        out = subprocess.check_output(cmd, text=True)
+        scheduled_tasks_data = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        scheduled_tasks_data = []
+    
+    # Construire une liste des périodes occupées
+    occupied_periods = []
+    for task_data in scheduled_tasks_data:
+        task_assignee = task_data.get("uda", {}).get("assignee") or task_data.get("assignee") or ""
+        if assignee != "default" and task_assignee != assignee:
+            continue
+        
+        scheduled = TWTime.parse_tw_datetime(task_data.get("scheduled"))
+        est_min = TWTime.parse_duration_to_minutes(
+            task_data.get("uda", {}).get("estTime") or task_data.get("estTime")
+        )
+        
+        if scheduled and est_min > 0:
+            end_time = scheduled + dt.timedelta(minutes=est_min)
+            occupied_periods.append((scheduled, end_time))
+    
+    # Trier les périodes occupées par date de début
+    occupied_periods.sort()
+    
+    # Chercher le dernier créneau libre en remontant dans le temps
+    current_date = date.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    for days_back in range(max_days_back):
+        check_date = current_date - dt.timedelta(days=days_back)
+        slots = pool_calendar.get_slots_for_day(check_date) 
+        
+        # Parcourir les créneaux de ce jour en ordre inverse (du plus récent au plus ancien)
+        for slot_start, slot_end in reversed(slots):
+            # Ne considérer que les créneaux qui se terminent avant la date de référence
+            if slot_end > date:
+                continue
+            
+            # Vérifier si ce créneau est libre (pas d'intersection avec les tâches planifiées)
+            is_free = True
+            free_start = slot_start
+            free_end = slot_end
+            print("slot start : ", slot_start, " slot_end : ", slot_end, " is_free : ", is_free)
+            
+            for occupied_start, occupied_end in occupied_periods:  
+                print("occupied_start : ", occupied_start, ", occupied_end : ", occupied_end)
+                # Vérifier s'il y a une intersection
+                if not (occupied_end <= slot_start or occupied_start >= slot_end):
+                    # Il y a une intersection, le créneau n'est pas complètement libre
+                    # On peut essayer de trouver un sous-créneau libre
+                    if occupied_start > slot_start and occupied_end < slot_end:
+                        # La tâche est au milieu du créneau
+                        # On prend la partie après la tâche si elle est avant la date
+                        if occupied_end < date:
+                            free_start = occupied_end
+                            free_end = slot_end
+                        else:
+                            # Sinon on prend la partie avant la tâche
+                            free_start = slot_start
+                            free_end = occupied_start
+                    elif occupied_start <= slot_start and occupied_end >= slot_end:
+                        # Le créneau est complètement occupé
+                        is_free = False
+                        break
+                    elif occupied_start <= slot_start:
+                        # La tâche commence avant le créneau et se termine dedans
+                        free_start = occupied_end
+                    else:
+                        # La tâche commence dans le créneau
+                        free_end = occupied_start
+            
+            if is_free:
+                # Vérifier si le créneau libre a la durée minimale requise
+                duration = (free_end - free_start).total_seconds() / 60
+                print("duration : ", duration)
+                if duration >= min_duration:
+                    return (free_start, free_end)
+    
+    return None
+
 # ========= Utilitaires de parsing =========
 
 # ========= Lecture Taskwarrior =========
@@ -279,23 +395,49 @@ def test_task_from_uuid():
                 else:
                     print(f"  Aucune plage disponible pour le pool '{task.pool}' ce jour-là.")
         
-        print("\n==== Test get_previous_slot_end() ====")
+        print("\n==== Test get_previous_free_slot() ====")
         
-        # Calculer la fin du créneau précédent
-        previous_slot_end = task.get_previous_slot_end()
+        # Utiliser la date due comme référence, ou maintenant si pas de due
+        reference_date = task.due if task.due else dt.datetime.now()
         
-        if previous_slot_end is None:
-            print("Impossible de trouver un créneau précédent (pas de date due ou pas de créneau trouvé).")
+        # Chercher un créneau libre pour la durée de la tâche
+        previous_free_slot = get_previous_free_slot(
+            date=reference_date,
+            pool=task.pool,
+            assignee=task.assignee or "default",
+            min_duration=task.est_min
+        )
+        
+        if previous_free_slot is None:
+            print(f"✗ Aucun créneau libre trouvé dans le pool '{task.pool}' avant {TWTime.fmt_tw_datetime_local(reference_date)}")
+            print(f"  (durée requise: {task.est_min} minutes)")
         else:
-            print(f"Fin du créneau précédent: {TWTime.fmt_tw_datetime_local(previous_slot_end)}")
+            slot_start, slot_end = previous_free_slot
+            duration = (slot_end - slot_start).total_seconds() / 60
             
-            if task.due and previous_slot_end != task.due:
-                time_diff = (task.due - previous_slot_end).total_seconds() / 60
-                print(f"Différence avec la date due: {int(time_diff)} minutes ({time_diff/60:.1f} heures)")
-                print(f"→ La tâche doit être terminée avant {previous_slot_end.strftime('%A %Y-%m-%d à %H:%M')}")
-            else:
-                print("La date due est déjà dans un créneau du pool, pas d'ajustement nécessaire.")
+            print(f"✓ Créneau libre trouvé dans le pool '{task.pool}':")
+            print(f"  Début: {slot_start.strftime('%A %Y-%m-%d à %H:%M')}")
+            print(f"  Fin:   {slot_end.strftime('%A %Y-%m-%d à %H:%M')}")
+            print(f"  Durée disponible: {int(duration)} minutes")
+            print(f"  Durée requise: {task.est_min} minutes")
+            
+            if task.due:
+                time_before_due = (task.due - slot_end).total_seconds() / 60
+                print(f"  Temps avant la date due: {int(time_before_due)} minutes ({time_before_due/60:.1f} heures)")
+                
+                # Vérifier si la tâche peut être planifiée dans ce créneau
+                if duration >= task.est_min:
+                    print(f"  → La tâche PEUT être planifiée dans ce créneau")
+                    # Calculer quand elle devrait commencer pour finir à temps
+                    task_start = slot_end - dt.timedelta(minutes=task.est_min)
+                    if task_start >= slot_start:
+                        print(f"  → Planification suggérée: {task_start.strftime('%A %Y-%m-%d à %H:%M')} - {slot_end.strftime('%H:%M')}")
+                    else:
+                        print(f"  ⚠ Le créneau est trop court, la tâche devrait commencer avant le début du créneau")
+                else:
+                    print(f"  ✗ Le créneau est trop court pour la tâche")
         
+
         # Assigner la critical_due_date à la tâche
         task.set_critical_due_date()
         print(f"\nCritical due date assignée à la tâche: {TWTime.fmt_tw_datetime_local(task.critical_due_date)}")
@@ -391,7 +533,6 @@ def main_plannificateur():
     if not tasks:
         print("Aucune tâche éligible trouvée.", file=sys.stderr)
         sys.exit(1)
-
     
 
     print_report(tasks)
