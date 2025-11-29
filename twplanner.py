@@ -106,7 +106,8 @@ def get_previous_free_slot(
     pool: str, 
     assignee: str = "default",
     min_duration: int = 0,
-    max_days_back: int = 30
+    max_days_back: int = 30,
+    schedule_type: str = "scheduled"
 ) -> Optional[Tuple[dt.datetime, dt.datetime]]:
     """
     Trouve le dernier créneau libre avant une date donnée pour un pool spécifique.
@@ -120,6 +121,8 @@ def get_previous_free_slot(
         assignee: Nom de l'assignee
         min_duration: Durée minimale requise en minutes (0 = n'importe quelle durée)
         max_days_back: Nombre maximum de jours à remonter dans le temps
+        schedule_type: Type de schedule à considérer ("scheduled" pour le vrai scheduled,
+                      "proposed" pour proposed_scheduled, "both" pour les deux)
     
     Returns:
         Tuple (datetime_debut, datetime_fin) du créneau libre trouvé, ou None si aucun
@@ -137,9 +140,14 @@ def get_previous_free_slot(
     # Récupérer toutes les tâches planifiées pour ce pool et cet assignee
     # On cherche les tâches avec scheduled_lock défini
     try:
-        cmd = ["task", f"pool:{pool}", "status:pending", "scheduled.any:", "rc.verbose=nothing", "export"]
+        #à voir si on choisi de filtrer dès la commande en fonction du paramètre. Je suppose que ça va dépendre du nombre de tache à traiter
+        #cmd = ["task", f"pool:{pool}", "status:pending", "scheduled.any:", "rc.verbose=nothing", "export"]
+        cmd = ["task", f'pool:"{pool}"', 'and', 'status.not:"completed"', 'and', r'\(', 'scheduled.not:', 'or', 'proposed_scheduled.not:', r'\)', 'rc.verbose=nothing', 'export']
+        print(f"\nDEBUG: Commande exécutée = {' '.join(cmd)}\n")
         out = subprocess.check_output(cmd, text=True)
+        print(f"\nDEBUG: Sortie de la commande = {out}\n")
         scheduled_tasks_data = json.loads(out or "[]")
+        print(f"DEBUG: Nombre de tâches récupérées = {len(scheduled_tasks_data)}\n")
     except (subprocess.CalledProcessError, json.JSONDecodeError):
         scheduled_tasks_data = []
     
@@ -150,7 +158,15 @@ def get_previous_free_slot(
         if assignee != "default" and task_assignee != assignee:
             continue
         
+        # Chercher d'abord le scheduled (prioritaire)
         scheduled = TWTime.parse_tw_datetime(task_data.get("scheduled"))
+        
+        # Si pas de scheduled et que schedule_type inclut "proposed", chercher proposed_scheduled
+        if not scheduled and schedule_type in ["proposed"]:
+            scheduled = TWTime.parse_tw_datetime(
+                task_data.get("uda", {}).get("proposed_scheduled") or task_data.get("proposed_scheduled")
+            )
+        
         est_min = TWTime.parse_duration_to_minutes(
             task_data.get("uda", {}).get("estTime") or task_data.get("estTime")
         )
@@ -405,7 +421,8 @@ def test_task_from_uuid():
             date=reference_date,
             pool=task.pool,
             assignee=task.assignee or "default",
-            min_duration=task.est_min
+            min_duration=task.est_min,
+            schedule_type="proposed"
         )
         
         if previous_free_slot is None:
