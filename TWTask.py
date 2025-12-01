@@ -217,3 +217,55 @@ class Task:
         Calcule et assigne la critical_due_date pour cette tâche.
         """
         self.critical_due_date = self.get_previous_slot_end()
+
+    def set_proposed_scheduled(self, schedule_type: str = "proposed") -> bool:
+        """
+        Calcule et assigne le proposed_scheduled pour cette tâche en utilisant
+        get_previous_free_slot() pour trouver le dernier créneau libre disponible.
+        
+        Args:
+            schedule_type: Type de schedule à considérer ("scheduled", "proposed", "both")
+        
+        Returns:
+            True si un créneau a été trouvé et assigné, False sinon
+        """
+        # Import local pour éviter les dépendances circulaires
+        from twplanner import get_previous_free_slot
+        
+        # Utiliser la date due comme référence, ou maintenant si pas de due
+        reference_date = self.due if self.due else dt.datetime.now()
+        
+        # Chercher un créneau libre pour la durée de la tâche
+        free_slot = get_previous_free_slot(
+            date=reference_date,
+            pool=self.pool,
+            assignee=self.assignee or "default",
+            min_duration=self.est_min,
+            schedule_type=schedule_type
+        )
+        
+        if free_slot is None:
+            # Aucun créneau libre trouvé
+            self.proposed_scheduled = None
+            return False
+        
+        slot_start, slot_end = free_slot
+        duration = (slot_end - slot_start).total_seconds() / 60
+        
+        # Vérifier si la tâche peut être planifiée dans ce créneau
+        if duration >= self.est_min:
+            # Calculer quand elle devrait commencer pour finir à temps
+            task_start = slot_end - dt.timedelta(minutes=self.est_min)
+            
+            if task_start >= slot_start:
+                # Le créneau est assez grand, planifier la tâche pour finir à la fin du créneau
+                self.proposed_scheduled = task_start
+                return True
+            else:
+                # Le créneau est trop court
+                self.proposed_scheduled = None
+                return False
+        else:
+            # Le créneau est trop court
+            self.proposed_scheduled = None
+            return False
