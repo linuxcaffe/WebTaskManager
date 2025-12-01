@@ -218,13 +218,14 @@ class Task:
         """
         self.critical_due_date = self.get_previous_slot_end()
 
-    def set_proposed_scheduled(self, schedule_type: str = "proposed") -> bool:
+    def set_proposed_scheduled(self, schedule_type: str = "proposed", reference_date: Optional[dt.datetime] = None) -> bool:
         """
         Calcule et assigne le proposed_scheduled pour cette tâche en utilisant
         get_previous_free_slot() pour trouver le dernier créneau libre disponible.
         
         Args:
             schedule_type: Type de schedule à considérer ("scheduled", "proposed", "both")
+            reference_date: Date de référence optionnelle (si None, utilise self.due puis dt.datetime.now())
         
         Returns:
             True si un créneau a été trouvé et assigné, False sinon
@@ -232,12 +233,25 @@ class Task:
         # Import local pour éviter les dépendances circulaires
         from twplanner import get_previous_free_slot
         
-        # Utiliser la date due comme référence, ou maintenant si pas de due
-        reference_date = self.due if self.due else dt.datetime.now()
+        # Déterminer la date de référence : reference_date > self.due > maintenant
+        if reference_date is not None:
+            ref_date = reference_date
+        elif self.due is not None:
+            ref_date = self.due
+        else:
+            ref_date = dt.datetime.now()
+        
+        # Supprimer le proposed_scheduled existant dans Taskwarrior pour éviter les conflits
+        try:
+            cmd = ["task", self.uuid, "modify", "proposed_scheduled:"]
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError:
+            # Si l'effacement échoue, ce n'est pas grave (le champ n'existe peut-être pas)
+            pass
         
         # Chercher un créneau libre pour la durée de la tâche
         free_slot = get_previous_free_slot(
-            date=reference_date,
+            date=ref_date,
             pool=self.pool,
             assignee=self.assignee or "default",
             min_duration=self.est_min,
@@ -260,7 +274,24 @@ class Task:
             if task_start >= slot_start:
                 # Le créneau est assez grand, planifier la tâche pour finir à la fin du créneau
                 self.proposed_scheduled = task_start
-                return True
+                
+                # Mettre à jour dans Taskwarrior
+                from TWTime import fmt_tw_datetime_local
+                formatted_datetime = fmt_tw_datetime_local(task_start)
+                
+                if formatted_datetime:
+                    try:
+                        cmd = ["task", self.uuid, "modify", f"proposed_scheduled:{formatted_datetime}"]
+                        subprocess.run(cmd, check=True, capture_output=True, text=True)
+                        return True
+                    except subprocess.CalledProcessError as e:
+                        print(f"✗ Erreur lors de la mise à jour de proposed_scheduled dans Taskwarrior: {e}")
+                        if e.stderr:
+                            print(f"  Détails: {e.stderr}")
+                        return False
+                else:
+                    print(f"✗ Erreur: Impossible de formater la datetime {task_start}")
+                    return False
             else:
                 # Le créneau est trop court
                 self.proposed_scheduled = None

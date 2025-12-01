@@ -143,11 +143,11 @@ def get_previous_free_slot(
         #à voir si on choisi de filtrer dès la commande en fonction du paramètre. Je suppose que ça va dépendre du nombre de tache à traiter
         #cmd = ["task", f"pool:{pool}", "status:pending", "scheduled.any:", "rc.verbose=nothing", "export"]
         cmd = ["task", f'pool:"{pool}"', 'and', 'status.not:"completed"', 'and', r'\(', 'scheduled.not:', 'or', 'proposed_scheduled.not:', r'\)', 'rc.verbose=nothing', 'export']
-        print(f"\nDEBUG: Commande exécutée = {' '.join(cmd)}\n")
+        #print(f"\nDEBUG: Commande exécutée = {' '.join(cmd)}\n")
         out = subprocess.check_output(cmd, text=True)
-        print(f"\nDEBUG: Sortie de la commande = {out}\n")
+        #print(f"\nDEBUG: Sortie de la commande = {out}\n")
         scheduled_tasks_data = json.loads(out or "[]")
-        print(f"DEBUG: Nombre de tâches récupérées = {len(scheduled_tasks_data)}\n")
+        #print(f"DEBUG: Nombre de tâches récupérées = {len(scheduled_tasks_data)}\n")
     except (subprocess.CalledProcessError, json.JSONDecodeError):
         scheduled_tasks_data = []
     
@@ -195,10 +195,10 @@ def get_previous_free_slot(
             is_free = True
             free_start = slot_start
             free_end = slot_end
-            print("slot start : ", slot_start, " slot_end : ", slot_end, " is_free : ", is_free)
+            #print("slot start : ", slot_start, " slot_end : ", slot_end, " is_free : ", is_free)
             
             for occupied_start, occupied_end in occupied_periods:  
-                print("occupied_start : ", occupied_start, ", occupied_end : ", occupied_end)
+                #print("occupied_start : ", occupied_start, ", occupied_end : ", occupied_end)
                 # Vérifier s'il y a une intersection
                 if not (occupied_end <= slot_start or occupied_start >= slot_end):
                     # Il y a une intersection, le créneau n'est pas complètement libre
@@ -227,7 +227,7 @@ def get_previous_free_slot(
             if is_free:
                 # Vérifier si le créneau libre a la durée minimale requise
                 duration = (free_end - free_start).total_seconds() / 60
-                print("duration : ", duration)
+                #print("duration : ", duration)
                 if duration >= min_duration:
                     return (free_start, free_end)
     
