@@ -466,8 +466,9 @@ def test_task_from_uuid():
 def test_set_proposed_scheduled():
     """
     Fonction de test pour la méthode set_proposed_scheduled() de la classe Task.
+    Teste également la planification des dépendances.
     """
-    test_uuid = "d3805c24-52a3-4cc1-b20f-0518dab2110d"
+    test_uuid = "f5a56957-270f-4d44-baee-469157398656"
     
     print(f"==== Test set_proposed_scheduled() pour UUID: {test_uuid} ====\n")
     
@@ -478,39 +479,42 @@ def test_set_proposed_scheduled():
         print(f"✗ Aucune tâche trouvée avec l'UUID: {test_uuid}")
         return
     
-    print(f"Tâche: {task.description}")
-    print(f"Pool: {task.pool}")
-    print(f"Durée estimée: {task.est_min} minutes")
-    print(f"Assignee: {task.assignee or 'default'}")
-    print(f"Due date: {TWTime.fmt_tw_datetime_local(task.due) or 'Non définie'}")
-    print(f"Proposed scheduled (avant): {TWTime.fmt_tw_datetime_local(task.proposed_scheduled) or 'Non défini'}")
+    print(f"Tâche principale: {task.description}")
     
-    # Appeler set_proposed_scheduled()
-    print("\n--- Calcul du proposed_scheduled ---")
+    # Récupérer les dépendances
+    dependencies = task.get_dependencies()
+    
+    if dependencies:
+        print(f"\n=== Dépendances (AVANT planification) ===")
+        print_report(dependencies)
+        
+        # Trier les dépendances par urgence (de la moins urgente à la plus urgente)
+        sorted_deps = sorted(dependencies.values(), key=lambda t: t.urgency)
+        
+        print(f"\n=== Planification des dépendances ===")
+        for dep_task in sorted_deps:
+            print(f"\nPlanification de: {dep_task.description} (urgence: {dep_task.urgency:.2f})")
+            success = dep_task.set_proposed_scheduled(schedule_type="proposed")
+            if success:
+                print(f"  ✓ Planifié à {TWTime.fmt_tw_datetime_local(dep_task.proposed_scheduled)}")
+            else:
+                print(f"  ✗ Échec de la planification")
+        
+        print(f"\n=== Dépendances (APRÈS planification) ===")
+        # Recharger les dépendances pour voir les valeurs mises à jour
+        updated_deps = task.get_dependencies()
+        print_report(updated_deps)
+    else:
+        print("\nAucune dépendance trouvée pour cette tâche.")
+    
+    # Planifier la tâche principale
+    print(f"\n=== Planification de la tâche principale ===")
     success = task.set_proposed_scheduled(schedule_type="proposed")
     
     if success:
-        print(f"✓ Créneau libre trouvé et proposed_scheduled calculé")
-        print(f"Proposed scheduled (après): {TWTime.fmt_tw_datetime_local(task.proposed_scheduled)}")
-        
-        if task.due:
-            # Calculer la fin de la tâche
-            task_end = task.proposed_scheduled + dt.timedelta(minutes=task.est_min)
-            time_before_due = (task.due - task_end).total_seconds() / 60
-            
-            print(f"\nDétails de la planification:")
-            print(f"  Début de la tâche: {task.proposed_scheduled.strftime('%A %Y-%m-%d à %H:%M')}")
-            print(f"  Fin de la tâche: {task_end.strftime('%A %Y-%m-%d à %H:%M')}")
-            print(f"  Durée: {task.est_min} minutes")
-            print(f"  Temps avant la date due: {int(time_before_due)} minutes ({time_before_due/60:.1f} heures)")
-            
-            if time_before_due >= 0:
-                print(f"  ✓ La tâche sera terminée AVANT la date due")
-            else:
-                print(f"  ✗ ATTENTION: La tâche sera terminée APRÈS la date due!")
+        print(f"✓ Tâche principale planifiée à {TWTime.fmt_tw_datetime_local(task.proposed_scheduled)}")
     else:
-        print(f"✗ Aucun créneau libre trouvé pour planifier cette tâche")
-        print(f"Proposed scheduled (après): {task.proposed_scheduled}")
+        print(f"✗ Échec de la planification de la tâche principale")
     
     print("\n==== Fin du test set_proposed_scheduled() ====\n")
 
@@ -548,7 +552,7 @@ def test_calendar_slots():
     
     # Test avec une tâche
     print("\n\n=== Test planification d'une tâche ===")
-    test_uuid = "d3805c24-52a3-4cc1-b20f-0518dab2110d"
+    test_uuid = "f5a56957-270f-4d44-baee-469157398656"
     task = Task.from_uuid(test_uuid)
     
     if task:

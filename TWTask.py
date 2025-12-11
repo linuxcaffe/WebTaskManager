@@ -94,9 +94,13 @@ class Task:
             # Erreur de parsing JSON ou données manquantes
             return None
 
-    def get_dependencies(self) -> Dict[str, 'Task']:
+    def get_dependencies(self, recursive: bool = False) -> Dict[str, 'Task']:
         """
         Récupère toutes les tâches dont cette tâche dépend.
+        
+        Args:
+            recursive: Si True, récupère aussi les dépendances des dépendances (récursif)
+                      Si False, récupère uniquement le premier niveau
         
         Returns:
             Dictionnaire des tâches dépendantes (uuid -> Task)
@@ -109,6 +113,12 @@ class Task:
             dep_task = Task.from_uuid(dep_uuid)
             if dep_task:
                 dependencies[dep_uuid] = dep_task
+                
+                # Si mode récursif, récupérer aussi les dépendances de cette dépendance
+                if recursive and dep_task.depends:
+                    sub_dependencies = dep_task.get_dependencies(recursive=True)
+                    # Fusionner les sous-dépendances (évite les doublons grâce au dict)
+                    dependencies.update(sub_dependencies)
         
         return dependencies
 
