@@ -15,5 +15,8 @@
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.55.0"
+  },
+  "dependencies": {
+    "@toast-ui/calendar": "^2.1.3"
   }
 }
