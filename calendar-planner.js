@@ -611,42 +611,58 @@ function changeView(view) {
 // ===================================
 function updateCalendarTitle() {
     const titleEl = document.getElementById('calendar-title');
-    console.log('Mise à jour du titre du calendrier...');
     
     try {
-        let dateRange = calendar.getDateRangeStart();
+        const dateRange = calendar.getDateRangeStart();
         const view = calendar.getViewName();
         
-        // Vérifier si dateRange est un objet Date valide
-        const isValidDate = dateRange && 
-                          (dateRange instanceof Date || Object.prototype.toString.call(dateRange) === '[object Date]') && 
-                          !isNaN(dateRange.getTime());
-                          
-        if (!isValidDate) {
-            dateRange = new Date();
+        // Extraire la date de l'objet dateRange
+        let startDate;
+        if (dateRange && dateRange.d) {
+            // Si dateRange a une propriété 'd' (cas de Toast UI Calendar)
+            startDate = new Date(dateRange.d);
+        } else if (dateRange instanceof Date || (dateRange && dateRange.getTime)) {
+            // Si c'est déjà un objet Date
+            startDate = new Date(dateRange);
+        } else {
+            // Fallback sur la date actuelle
+            startDate = new Date();
         }
         
-        console.log('Données de la vue:', { 
-            dateRange: dateRange.toString(), 
-            view, 
-            type: typeof dateRange,
-            isDate: dateRange instanceof Date,
-            time: dateRange.getTime()
-        });
-
         let title = '';
         
         if (view === 'month') {
-            title = dateRange.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+            // Pour la vue mois, on prend le 1er jour du mois de la première semaine complète
+            // pour éviter d'afficher le mois précédent
+            let firstDayOfMonth = new Date(startDate);
+            
+            // Si on n'est pas le 1er du mois, on passe au mois suivant
+            if (firstDayOfMonth.getDate() > 1) {
+                firstDayOfMonth.setMonth(firstDayOfMonth.getMonth() + 1, 1);
+            }
+            
+            title = firstDayOfMonth.toLocaleDateString('fr-FR', { 
+                month: 'long', 
+                year: 'numeric' 
+            });
         } else if (view === 'week') {
-            let endDate = calendar.getDateRangeEnd();
-            if (!(endDate instanceof Date) || isNaN(endDate.getTime())) {
-                endDate = new Date(dateRange);
+            let endDateObj = calendar.getDateRangeEnd();
+            let endDate = endDateObj && (endDateObj.d ? new Date(endDateObj.d) : new Date(endDateObj));
+            
+            if (!endDate || isNaN(endDate.getTime())) {
+                endDate = new Date(startDate);
                 endDate.setDate(endDate.getDate() + 6); // Ajoute 6 jours pour avoir une semaine complète
             }
-            title = `${dateRange.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+            
+            title = `${startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
         } else {
-            title = dateRange.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            // Vue jour
+            title = startDate.toLocaleDateString('fr-FR', { 
+                weekday: 'long', 
+                day: 'numeric', 
+                month: 'long', 
+                year: 'numeric' 
+            });
         }
 
         titleEl.textContent = title.charAt(0).toUpperCase() + title.slice(1);
