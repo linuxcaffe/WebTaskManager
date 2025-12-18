@@ -20,7 +20,7 @@ let currentFilter = {
 document.addEventListener('DOMContentLoaded', () => {
     initializeCalendar();
     setupEventListeners();
-    loadTasks();
+    //loadTasks();
 });
 
 // ===================================
@@ -95,20 +95,46 @@ function initializeCalendar() {
 // ===================================
 function setupEventListeners() {
     // Navigation du calendrier
-    document.getElementById('prev-btn').addEventListener('click', () => {
-        calendar.prev();
-        updateCalendarTitle();
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const todayBtn = document.getElementById('today-btn');
+    
+    console.log('Boutons de navigation:', { prevBtn, nextBtn, todayBtn });
+    
+    prevBtn.addEventListener('click', () => {
+        console.log('Bouton précédent cliqué');
+        try {
+            calendar.prev();
+            console.log('Navigation précédente effectuée');
+            updateCalendarTitle();
+        } catch (error) {
+            console.error('Erreur lors de la navigation précédente:', error);
+        }
     });
 
-    document.getElementById('next-btn').addEventListener('click', () => {
-        calendar.next();
-        updateCalendarTitle();
+    nextBtn.addEventListener('click', () => {
+        console.log('Bouton suivant cliqué');
+        try {
+            calendar.next();
+            console.log('Navigation suivante effectuée');
+            updateCalendarTitle();
+        } catch (error) {
+            console.error('Erreur lors de la navigation suivante:', error);
+        }
     });
 
-    document.getElementById('today-btn').addEventListener('click', () => {
-        calendar.today();
-        updateCalendarTitle();
-    });
+    if (todayBtn) {
+        todayBtn.addEventListener('click', () => {
+            console.log('Bouton aujourd\'hui cliqué');
+            try {
+                calendar.today();
+                console.log('Retour à aujourd\'hui effectué');
+                updateCalendarTitle();
+            } catch (error) {
+                console.error('Erreur lors du retour à aujourd\'hui:', error);
+            }
+        });
+    }
 
     // Changement de vue
     document.querySelectorAll('.view-btn').forEach(btn => {
@@ -585,21 +611,49 @@ function changeView(view) {
 // ===================================
 function updateCalendarTitle() {
     const titleEl = document.getElementById('calendar-title');
-    const dateRange = calendar.getDateRangeStart();
-    const view = calendar.getViewName();
-
-    let title = '';
+    console.log('Mise à jour du titre du calendrier...');
     
-    if (view === 'month') {
-        title = dateRange.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-    } else if (view === 'week') {
-        const endDate = calendar.getDateRangeEnd();
-        title = `${dateRange.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-    } else {
-        title = dateRange.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    }
+    try {
+        let dateRange = calendar.getDateRangeStart();
+        const view = calendar.getViewName();
+        
+        // Vérifier si dateRange est un objet Date valide
+        const isValidDate = dateRange && 
+                          (dateRange instanceof Date || Object.prototype.toString.call(dateRange) === '[object Date]') && 
+                          !isNaN(dateRange.getTime());
+                          
+        if (!isValidDate) {
+            dateRange = new Date();
+        }
+        
+        console.log('Données de la vue:', { 
+            dateRange: dateRange.toString(), 
+            view, 
+            type: typeof dateRange,
+            isDate: dateRange instanceof Date,
+            time: dateRange.getTime()
+        });
 
-    titleEl.textContent = title.charAt(0).toUpperCase() + title.slice(1);
+        let title = '';
+        
+        if (view === 'month') {
+            title = dateRange.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+        } else if (view === 'week') {
+            let endDate = calendar.getDateRangeEnd();
+            if (!(endDate instanceof Date) || isNaN(endDate.getTime())) {
+                endDate = new Date(dateRange);
+                endDate.setDate(endDate.getDate() + 6); // Ajoute 6 jours pour avoir une semaine complète
+            }
+            title = `${dateRange.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+        } else {
+            title = dateRange.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        }
+
+        titleEl.textContent = title.charAt(0).toUpperCase() + title.slice(1);
+        console.log('Titre mis à jour:', titleEl.textContent);
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour du titre:', error);
+    }
 }
 
 // ===================================
