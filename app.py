@@ -67,29 +67,58 @@ def static_files(filename):
     """Serve static files (CSS, JS, etc.)"""
     return send_from_directory('.', filename)
 
-@app.route('/api/tasks')
-def get_tasks():
-    """Get all pending tasks in JSON format"""
-    result = run_task_command('task status:PENDING export')
+@app.route('/api/tasks/planned')
+def get_planned_tasks():
+    """Get all planned tasks (with scheduled date) in JSON format"""
+    result = run_task_command('task scheduled.not: export')
     
     if result['success']:
         try:
-            tasks = json.loads(result['stdout']) if result['stdout'].strip() else []
+            tasks = json.loads(result['stdout'])
+            return jsonify({
+                'success': True,
+                'data': tasks
+            })
+        except json.JSONDecodeError as e:
+            return jsonify({
+                'success': False,
+                'error': f'Erreur de décodage JSON: {str(e)}',
+                'stdout': result['stdout'],
+                'stderr': result['stderr']
+            }), 500
+    else:
+        return jsonify({
+            'success': False,
+            'error': 'Erreur lors de la récupération des tâches planifiées',
+            'stderr': result['stderr']
+        }), 500
+
+@app.route('/api/tasks')
+def get_tasks():
+    """Get all pending tasks in JSON format"""
+    result = run_task_command('task status:pending export')
+    
+    if result['success']:
+        try:
+            tasks = json.loads(result['stdout'])
             # Sort tasks by urgency in descending order
             tasks.sort(key=lambda x: x.get('urgency', 0), reverse=True)
             return jsonify({
                 'success': True,
                 'tasks': tasks
             })
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             return jsonify({
                 'success': False,
-                'error': 'Failed to parse task data'
+                'error': f'Erreur de décodage JSON: {str(e)}',
+                'stdout': result['stdout'],
+                'stderr': result['stderr']
             }), 500
     else:
         return jsonify({
             'success': False,
-            'error': result['stderr']
+            'error': 'Erreur lors de la récupération des tâches',
+            'stderr': result['stderr']
         }), 500
 
 @app.route('/api/projects')

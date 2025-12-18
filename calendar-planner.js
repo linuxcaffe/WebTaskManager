@@ -20,7 +20,7 @@ let currentFilter = {
 document.addEventListener('DOMContentLoaded', () => {
     initializeCalendar();
     setupEventListeners();
-    //loadTasks();
+    loadTasks();
 });
 
 // ===================================
@@ -186,22 +186,58 @@ function setupEventListeners() {
 // ===================================
 // Chargement des tâches depuis l'API
 // ===================================
-async function loadTasks() {
-    try {
-        const response = await fetch('/api/tasks');
-        const data = await response.json();
-
-        if (data.success) {
-            allTasks = data.tasks;
-            processTasksForCalendar();
-            filterAndDisplayTasks();
-        } else {
-            showError('Erreur lors du chargement des tâches');
-        }
-    } catch (error) {
-        console.error('Erreur:', error);
-        showError('Impossible de charger les tâches');
-    }
+function loadTasks() {
+    console.log('Chargement des tâches...');
+    // Charger les tâches non planifiées
+    fetch('/api/tasks')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Tâches non planifiées reçues:', data);
+            if (data.success) {
+                // Réinitialiser allTasks avant d'ajouter les nouvelles tâches
+                allTasks = [];
+                const initialTasks = data.tasks || [];
+                unplannedTasks = initialTasks.filter(task => !task.scheduled);
+                console.log(`${unplannedTasks.length} tâches non planifiées trouvées`);
+                filterAndDisplayTasks();
+                
+                // Charger les tâches planifiées
+                console.log('Chargement des tâches planifiées...');
+                return fetch('/api/tasks/planned');
+            } else {
+                throw new Error(data.error || 'Erreur lors du chargement des tâches');
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Tâches planifiées reçues:', data);
+            if (data.success) {
+                const plannedTasks = data.data || [];
+                console.log(`${plannedTasks.length} tâches planifiées trouvées`);
+                
+                // Afficher les détails des tâches planifiées pour le débogage
+                plannedTasks.forEach((task, index) => {
+                    console.log(`Tâche planifiée ${index + 1}:`, {
+                        description: task.description,
+                        scheduled: task.scheduled,
+                        due: task.due,
+                        estTime: task.estTime,
+                        pool: task.pool
+                    });
+                });
+                
+                // Mettre à jour allTasks avec les tâches non planifiées et planifiées
+                allTasks = [...unplannedTasks, ...plannedTasks];
+                console.log(`Total des tâches chargées: ${allTasks.length} (${unplannedTasks.length} non planifiées, ${plannedTasks.length} planifiées)`);
+                processTasksForCalendar();
+            } else {
+                console.error('Erreur lors du chargement des tâches planifiées:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des tâches:', error);
+            showError('Erreur lors du chargement des tâches: ' + error.message);
+        });
 }
 
 // ===================================
@@ -213,30 +249,80 @@ function processTasksForCalendar() {
     unplannedTasks = [];
 
     allTasks.forEach(task => {
-        // Vérifier si la tâche a un scheduled ou proposed_scheduled
-        const scheduledDate = task.scheduled || task.proposed_scheduled;
-        
-        if (scheduledDate) {
-            scheduledTasks.push(createCalendarEvent(task, scheduledDate));
+        if (task.scheduled) {
+            scheduledTasks.push(task);
         } else {
             unplannedTasks.push(task);
         }
     });
 
-    // Mettre à jour le calendrier avec les tâches planifiées
+    // Créer les événements pour les tâches planifiées
+    const events = [];
+    scheduledTasks.forEach(task => {
+        try {
+            const event = createCalendarEvent(task, task.scheduled);
+            if (event) {
+                events.push(event);
+            }
+        } catch (e) {
+            console.error('Erreur lors de la création de l\'événement pour la tâche:', task, e);
+        }
+    });
+    
+    // Effacer les événements existants et ajouter les nouveaux
     calendar.clear();
-    calendar.createEvents(scheduledTasks);
+    if (events.length > 0) {
+        calendar.createEvents(events);
+    }
+    
+    // Mettre à jour l'affichage
+    calendar.render();
 }
 
 // ===================================
 // Créer un événement calendrier depuis une tâche
 // ===================================
 function createCalendarEvent(task, scheduledDate) {
-    const start = new Date(scheduledDate);
-    const duration = parseEstTime(task.estTime) || 60; // Durée par défaut: 60 min
+    // Vérifier et formater la date de planification au format ISO 8601 (20251220T120000Z)
+    let start;
+    try {
+        // Convertir le format 20251220T120000Z en 2025-12-20T12:00:00Z pour une meilleure compatibilité
+        const isoDate = scheduledDate.replace(
+            /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
+            '$1-$2-$3T$4:$5:$6Z'
+        );
+        start = new Date(isoDate);
+        
+        if (isNaN(start.getTime())) {
+            console.error('Date de planification invalide:', scheduledDate, 'formaté en:', isoDate, 'pour la tâche:', task);
+            return null;
+        } else {
+            console.log('Date convertie avec succès:', scheduledDate, '->', start);
+        }
+    } catch (e) {
+        console.error('Erreur lors de la création de la date:', e, 'pour la tâche:', task);
+        return null;
+    }
+    
+    // Définir une durée par défaut si nécessaire
+    let duration;
+    if (task.estTime && task.estTime.startsWith('PT')) {
+        // Format ISO 8601 pour la durée (ex: PT1H pour 1 heure, PT30M pour 30 minutes)
+        const durationMatch = task.estTime.match(/PT(\d+H)?(\d+M)?/);
+        let hours = 0, minutes = 0;
+        if (durationMatch) {
+            if (durationMatch[1]) hours = parseInt(durationMatch[1]);
+            if (durationMatch[2]) minutes = parseInt(durationMatch[2]);
+        }
+        duration = hours * 60 + minutes;
+    }
+    
+    // Durée par défaut de 60 minutes si non spécifiée ou invalide
+    duration = duration || 60;
     const end = new Date(start.getTime() + duration * 60000);
 
-    const pool = task.pool || 'scheduled';
+    // Déterminer le pool et l'ID du calendrier
+    const pool = (task.pool || 'scheduled').toLowerCase();
     const calendarId = ['pro', 'perso'].includes(pool) ? pool : 'scheduled';
 
     return {
@@ -321,7 +407,18 @@ function createTaskCard(task) {
     const duration = parseEstTime(task.estTime);
     const durationText = duration ? formatDuration(duration) : 'Non estimé';
     
-    const dueDate = task.due ? new Date(task.due).toLocaleDateString('fr-FR') : '';
+    // Gestion des dates avec vérification de validité
+    let dueDate = '';
+    if (task.due) {
+        try {
+            const date = new Date(task.due);
+            if (!isNaN(date.getTime())) {
+                dueDate = date.toLocaleDateString('fr-FR');
+            }
+        } catch (e) {
+            console.error('Format de date invalide pour la tâche:', task);
+        }
+    }
     const tags = task.tags || [];
     const pool = task.pool || 'pro';
 
@@ -708,7 +805,25 @@ function formatDuration(minutes) {
 }
 
 function formatTime(date) {
-    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    try {
+        // Gérer les dates de Toast UI Calendar qui sont des objets avec une propriété 'd'
+        const dateObj = date && typeof date === 'object' && 'd' in date ? date.d : date;
+        
+        // Vérifier si la date est valide
+        if (!dateObj || !(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
+            console.warn('Date invalide dans formatTime:', date);
+            return '';
+        }
+        
+        return dateObj.toLocaleTimeString('fr-FR', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false
+        });
+    } catch (e) {
+        console.error('Erreur dans formatTime:', e, 'date:', date);
+        return '';
+    }
 }
 
 function escapeHtml(text) {
