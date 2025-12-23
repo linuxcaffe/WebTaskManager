@@ -17,6 +17,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+#Documentation
+relevant_documentation/
+
 # Fichiers de cache et logs
 *.log
 npm-debug.log*
@@ -54,3 +57,4 @@ test-results/
 # Fichiers de débogage
 command.debug
 _*
+
