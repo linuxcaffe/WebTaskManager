@@ -132,6 +132,29 @@ npm test
 - `config.py`: Configuration du backend.
 - `package.json`: Configuration des dépendances JavaScript.
 
+### UDA (User Defined Attributes) Taskwarrior utilisés
+
+Le projet utilise les UDA (User Defined Attributes) suivants dans Taskwarrior :
+
+1. **estTime** : Durée estimée de la tâche en minutes
+2. **assignee** : Personne à qui la tâche est assignée
+3. **pool** : Catégorie/pool de la tâche (ex: pro, asso, sleep, perso)
+4. **proposed_scheduled** : Date/heure proposée pour la planification de la tâche
+
+Ces UDA sont utilisés dans les fichiers suivants :
+- `twplanner.py` : Pour la lecture, le traitement et l'écriture des UDA
+- `TWTask.py` : Pour la gestion des tâches avec leurs UDA
+
+Les UDA standards de Taskwarrior utilisés incluent :
+- uuid
+- description
+- project
+- depends
+- due
+- scheduled
+- urgency
+- status
+
 ## Checklists
 
 ### Avant d'écrire du code
