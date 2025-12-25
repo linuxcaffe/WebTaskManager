@@ -172,7 +172,7 @@ function setupEventListeners() {
     // Écouter la suppression
     calendar.on('beforeDeleteEvent', (event) => {
       calendar.deleteEvent(event.id, event.calendarId);
-});
+    });
 
 }
 
