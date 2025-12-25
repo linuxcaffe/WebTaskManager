@@ -61,6 +61,9 @@ function initializeCalendar() {
                 const endTime = formatTime(end);
                 return `<div class="calendar-event-time">${startTime} - ${endTime}</div>
                         <div class="calendar-event-title">${title}</div>`;
+            },
+            popupSave() {
+              return 'Ajouter';
             }
         },
         calendars: [
@@ -163,9 +166,13 @@ function setupEventListeners() {
 
     // Evenements liées à tui-calendar
     calendar.on('beforeUpdateEvent', ({ event, changes }) => {
-      calendar.updateEvent(event.id, event.calendarId, change);
+      calendar.updateEvent(event.id, event.calendarId, changes);
     });
 
+    // Écouter la suppression
+    calendar.on('beforeDeleteEvent', (event) => {
+      calendar.deleteEvent(event.id, event.calendarId);
+});
 
 }
 
