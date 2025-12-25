@@ -33,6 +33,7 @@ function initializeCalendar() {
         defaultView: 'week',
         useFormPopup: true,
         useDetailPopup: true,
+        usageStatistics: false,
         isReadOnly: false,
         week: {
             startDayOfWeek: 1, // Lundi
@@ -160,27 +161,12 @@ function setupEventListeners() {
         filterAndDisplayTasks();
     });
 
-    // Événements du calendrier
-    calendar.on('clickEvent', ({ event }) => {
-        showTaskDetailModal(event);
-    });
-
+    // Evenements liées à tui-calendar
     calendar.on('beforeUpdateEvent', ({ event, changes }) => {
-        handleEventUpdate(event, changes);
+      calendar.updateEvent(event.id, event.calendarId, change);
     });
 
-    // Modal
-    document.getElementById('modal-close-btn').addEventListener('click', closeModal);
-    document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
-    document.getElementById('modal-unschedule-btn').addEventListener('click', handleUnschedule);
-    document.getElementById('modal-done-btn').addEventListener('click', handleMarkDone);
 
-    // Fermer le modal en cliquant à l'extérieur
-    document.getElementById('task-detail-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'task-detail-modal') {
-            closeModal();
-        }
-    });
 }
 
 // ===================================
@@ -552,139 +538,9 @@ async function scheduleTask(task, dateTime) {
     }
 }
 
-// ===================================
-// Mise à jour d'événement (déplacement dans le calendrier)
-// ===================================
-async function handleEventUpdate(event, changes) {
-    const task = event.raw;
-    
-    if (!task) return;
 
-    const newStart = changes.start || event.start;
-    
-    try {
-        const response = await fetch(`/api/task/${task.id}/modify`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                proposed_scheduled: newStart.toISOString()
-            })
-        });
 
-        const data = await response.json();
 
-        if (data.success) {
-            calendar.updateEvent(event.id, event.calendarId, changes);
-            showSuccess('Tâche déplacée');
-        } else {
-            showError('Erreur lors du déplacement');
-        }
-    } catch (error) {
-        console.error('Erreur:', error);
-        showError('Impossible de déplacer la tâche');
-    }
-}
-
-// ===================================
-// Modal de détails de tâche
-// ===================================
-function showTaskDetailModal(event) {
-    const task = event.raw;
-    if (!task) return;
-
-    const modal = document.getElementById('task-detail-modal');
-    const modalBody = document.getElementById('modal-task-body');
-    const modalTitle = document.getElementById('modal-task-title');
-
-    modalTitle.textContent = task.description;
-
-    const duration = parseEstTime(task.estTime);
-    const durationText = duration ? formatDuration(duration) : 'Non estimé';
-    const dueDate = task.due ? new Date(task.due).toLocaleString('fr-FR') : 'Non définie';
-    const scheduledDate = event.start ? event.start.toLocaleString('fr-FR') : 'Non planifiée';
-    const tags = task.tags || [];
-    const project = task.project || 'Aucun';
-
-    modalBody.innerHTML = `
-        <div style="display: grid; gap: 1rem;">
-            <div><strong>📅 Planifiée:</strong> ${scheduledDate}</div>
-            <div><strong>⏰ Échéance:</strong> ${dueDate}</div>
-            <div><strong>⏱️ Durée estimée:</strong> ${durationText}</div>
-            <div><strong>📂 Projet:</strong> ${project}</div>
-            <div><strong>🎯 Pool:</strong> ${task.pool || 'pro'}</div>
-            ${tags.length > 0 ? `<div><strong>🏷️ Tags:</strong> ${tags.map(t => `#${t}`).join(', ')}</div>` : ''}
-            <div><strong>🔥 Urgence:</strong> ${(task.urgency || 0).toFixed(2)}</div>
-        </div>
-    `;
-
-    // Stocker l'ID de la tâche pour les actions
-    modal.dataset.taskId = task.id;
-    modal.dataset.eventId = event.id;
-
-    modal.classList.add('show');
-}
-
-function closeModal() {
-    const modal = document.getElementById('task-detail-modal');
-    modal.classList.remove('show');
-}
-
-async function handleUnschedule() {
-    const modal = document.getElementById('task-detail-modal');
-    const taskId = modal.dataset.taskId;
-
-    try {
-        const response = await fetch(`/api/task/${taskId}/modify`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                proposed_scheduled: '',
-                scheduled: ''
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            showSuccess('Tâche déplanifiée');
-            closeModal();
-            loadTasks();
-        } else {
-            showError('Erreur lors de la déplanification');
-        }
-    } catch (error) {
-        console.error('Erreur:', error);
-        showError('Impossible de déplanifier la tâche');
-    }
-}
-
-async function handleMarkDone() {
-    const modal = document.getElementById('task-detail-modal');
-    const taskId = modal.dataset.taskId;
-
-    try {
-        const response = await fetch(`/api/task/${taskId}/done`, {
-            method: 'POST'
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            showSuccess('Tâche terminée');
-            closeModal();
-            loadTasks();
-        } else {
-            showError('Erreur lors de la finalisation');
-        }
-    } catch (error) {
-        console.error('Erreur:', error);
-        showError('Impossible de terminer la tâche');
-    }
-}
 
 // ===================================
 // Changement de vue du calendrier
