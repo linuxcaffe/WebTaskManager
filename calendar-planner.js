@@ -31,8 +31,8 @@ function initializeCalendar() {
     
     calendar = new tui.Calendar(calendarEl, {
         defaultView: 'week',
-        useFormPopup: false,
-        useDetailPopup: false,
+        useFormPopup: true,
+        useDetailPopup: true,
         isReadOnly: false,
         week: {
             startDayOfWeek: 1, // Lundi
