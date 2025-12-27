@@ -200,9 +200,6 @@ function loadTasks() {
                 console.log(`${unplannedTasks.length} tâches non planifiées trouvées`);
                 filterAndDisplayTasks();
 
-                //Obligé de mettre
-                setupTaskSelection();
-                
                 // Charger les tâches planifiées
                 console.log('Chargement des tâches planifiées...');
                 return fetch('/api/tasks/planned');
@@ -341,22 +338,6 @@ function createCalendarEvent(task, scheduledDate) {
 // ===================================
 // Configuration de la sélection des tâches
 // ===================================
-function setupTaskSelection() {
-    const taskCards = document.querySelectorAll('.task-card');
-    
-    console.log('Setting up event listeners for ' + taskCards.length + ' task cards');
-
-    taskCards.forEach(card => {
-        const taskData = JSON.parse(card.dataset.taskData);
-        const taskDescription = taskData.description || 'Unnamed task';
-        
-        card.addEventListener('click', function(e) {
-            console.log('Event listener added for task: ' + taskDescription);
-            handleTaskCardClick(this);
-        });
-    });
-}
-
 function handleTaskCardClick(cardElement) {
     console.log('Evenement declenché !');
     // Deselect currently selected card if it's different
@@ -440,21 +421,25 @@ function displayUnplannedTasks(tasks) {
         return;
     }
 
-    container.innerHTML = tasks.map(task => createTaskCard(task)).join('');
+    // Vide le conteneur
+    container.innerHTML = '';
 
+    // Crée et ajoute chaque carte de tâche
+    tasks.forEach(task => {
+        const taskCard = createTaskCard(task);
+        container.appendChild(taskCard);
+    });
 }
 
-// ===================================
-// Créer une carte de tâche
-// ===================================
+
 function createTaskCard(task) {
     const priority = task.priority || 'M';
     const priorityClass = priority === 'H' ? 'high' : priority === 'M' ? 'medium' : 'low';
     const priorityText = priority === 'H' ? 'Haute' : priority === 'M' ? 'Moyenne' : 'Basse';
-    
+
     const duration = parseEstTime(task.estTime);
     const durationText = duration ? formatDuration(duration) : 'Non estimé';
-    
+
     // Gestion des dates avec vérification de validité
     let dueDate = '';
     if (task.due) {
@@ -470,29 +455,35 @@ function createTaskCard(task) {
     const tags = task.tags || [];
     const pool = task.pool || 'pro';
 
-    return `
-        <div class="task-card" 
-             data-task-id="${task.uuid}"
-             data-task-data='${JSON.stringify(task).replace(/'/g, "&apos;")}'>
-            <div class="task-card-header">
-                <span class="task-priority ${priorityClass}">${priorityText}</span>
-            </div>
-            <div class="task-description">${escapeHtml(task.description)}</div>
-            <div class="task-meta">
-                <span class="task-meta-item">⏱️ ${durationText}</span>
-                ${dueDate ? `<span class="task-meta-item">📅 ${dueDate}</span>` : ''}
-                <span class="task-meta-item">📂 ${pool}</span>
-            </div>
-            ${tags.length > 0 ? `
-                <div class="task-tags">
-                    ${tags.map(tag => `<span class="task-tag">#${tag}</span>`).join('')}
-                </div>
-            ` : ''}
+    // Création de l'élément DOM au lieu de retourner une chaîne HTML
+    const card = document.createElement('div');
+    card.className = 'task-card';
+    card.dataset.taskId = task.uuid;
+    card.dataset.taskData = JSON.stringify(task).replace(/'/g, "&apos;");
+    card.innerHTML = `
+        <div class="task-card-header">
+            <span class="task-priority ${priorityClass}">${priorityText}</span>
         </div>
+        <div class="task-description">${escapeHtml(task.description)}</div>
+        <div class="task-meta">
+            <span class="task-meta-item">⏱️ ${durationText}</span>
+            ${dueDate ? `<span class="task-meta-item">📅 ${dueDate}</span>` : ''}
+            <span class="task-meta-item">📂 ${pool}</span>
+        </div>
+        ${tags.length > 0 ? `
+            <div class="task-tags">
+                ${tags.map(tag => `<span class="task-tag">#${tag}</span>`).join('')}
+            </div>
+        ` : ''}
     `;
+
+    // Ajout de l'eventListener directement
+    card.addEventListener('click', function() {
+        handleTaskCardClick(this);
+    });
+
+    return card;
 }
-
-
 // ===================================
 // Changement de vue du calendrier
 // ===================================
