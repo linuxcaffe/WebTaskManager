@@ -1,0 +1,41 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Test tui.calendar</title>
+  <!-- 1. Toast UI Time Picker (OBLIGATOIRE) -->
+  <link rel="stylesheet" href="https://uicdn.toast.com/tui.time-picker/latest/tui-time-picker.css" />
+  <script src="https://uicdn.toast.com/tui.time-picker/latest/tui-time-picker.js"></script>
+  <!-- 2. Toast UI Date Picker (OBLIGATOIRE) -->
+  <link rel="stylesheet" href="https://uicdn.toast.com/tui.date-picker/latest/tui-date-picker.css" />
+  <script src="https://uicdn.toast.com/tui.date-picker/latest/tui-date-picker.js"></script>
+  <!-- 3. Toast UI Calendar -->
+  <link rel="stylesheet" href="https://uicdn.toast.com/calendar/v2.1.3/toastui-calendar.min.css" />
+</head>
+<body>
+  <div id="calendar" style="height: 800px;"></div>
+  <script src="https://uicdn.toast.com/calendar/v2.1.3/toastui-calendar.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const calendar = new tui.Calendar('#calendar', {
+        defaultView: 'week',
+        useFormPopup: true,
+        calendars: [
+          { id: 'cal1', name: 'Mon Calendrier', color: '#fff', backgroundColor: '#03bd9e' },
+        ],
+      });
+
+      calendar.on('beforeCreateEvent', (eventObj) => {
+        const newEvent = {
+          ...eventObj,
+          id: String(Date.now()),
+          calendarId: 'cal1',
+        };
+        calendar.createEvents([newEvent]);
+        console.log('Événement créé !');
+      });
+    });
+  </script>
+</body>
+</html>
