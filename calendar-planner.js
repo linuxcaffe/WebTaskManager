@@ -40,7 +40,7 @@ function initializeCalendar() {
             dayNames: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
             hourStart: 6,
             hourEnd: 23,
-            taskView: false,
+            taskView: true,
             eventView: ['time'],
             collapseDuplicateEvents: {
                 getDuplicateEvents: (targetEvent, events) => {
@@ -56,24 +56,14 @@ function initializeCalendar() {
         },
         template: {
             time(event) {
-                const { title, start, end } = event;
-                const startTime = formatTime(start);
-                const endTime = formatTime(end);
-                return `<div class="calendar-event-time">${startTime} - ${endTime}</div>
-                        <div class="calendar-event-title">${title}</div>`;
+                const { title } = event;
+                return `<div class="calendar-event-title">${title}</div>`;
             },
             popupSave() {
               return 'Ajouter';
             }
         },
         calendars: [
-            {
-                id: 'scheduled',
-                name: 'Tâches planifiées',
-                backgroundColor: '#4a90e2',
-                borderColor: '#357abd',
-                dragBackgroundColor: '#4a90e2'
-            },
             {
                 id: 'pro',
                 name: 'Pool Pro',
@@ -677,28 +667,6 @@ function formatDuration(minutes) {
         return `${hours}h`;
     } else {
         return `${mins}min`;
-    }
-}
-
-function formatTime(date) {
-    try {
-        // Gérer les dates de Toast UI Calendar qui sont des objets avec une propriété 'd'
-        const dateObj = date && typeof date === 'object' && 'd' in date ? date.d : date;
-        
-        // Vérifier si la date est valide
-        if (!dateObj || !(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
-            console.warn('Date invalide dans formatTime:', date);
-            return '';
-        }
-        
-        return dateObj.toLocaleTimeString('fr-FR', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: false
-        });
-    } catch (e) {
-        console.error('Erreur dans formatTime:', e, 'date:', date);
-        return '';
     }
 }
 
