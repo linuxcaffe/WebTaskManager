@@ -2,8 +2,8 @@
  * Calendar Planner - Intégration Toast UI Calendar avec Taskwarrior
  * Permet de glisser-déposer des tâches non planifiées dans le calendrier
  */
-
-// ===================================
+//
+//===================================
 // Variables globales
 // ===================================
 let calendar;
@@ -641,7 +641,19 @@ function updateCalendarTitle() {
 function parseEstTime(estTime) {
     if (!estTime) return null;
     
-    // Format: "1h30min" ou "30min" ou "1h"
+    // Handle ISO 8601 duration format (PT2H30M) that TaskWarrior uses
+    if (estTime.startsWith('PT')) {
+        const match = estTime.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+        if (match) {
+            const hours = parseInt(match[1] || 0);
+            const minutes = parseInt(match[2] || 0);
+            const seconds = parseInt(match[3] || 0);
+            
+            return hours * 60 + minutes + Math.round(seconds / 60);
+        }
+    }
+    
+    // Fallback for old format: "1h30min" ou "30min" ou "1h"
     const match = estTime.match(/(\d+)h|(\d+)min/g);
     if (!match) return null;
 
