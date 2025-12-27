@@ -157,6 +157,28 @@ function setupEventListeners() {
     });
 
     // Evenements liées à tui-calendar
+    calendar.on('selectDateTime', (eventInfo) => {
+        console.log('Event selectDateTime:', {
+            start: eventInfo.start,
+            end: eventInfo.end,
+            isAllday: eventInfo.isAllday,
+            gridSelectionElements: eventInfo.gridSelectionElements
+        });
+
+        // Additional logging for the grid elements
+        if (eventInfo.gridSelectionElements && eventInfo.gridSelectionElements.length > 0) {
+            console.log('Grid selection elements:', eventInfo.gridSelectionElements);
+            eventInfo.gridSelectionElements.forEach((element, index) => {
+                console.log(`Element ${index}:`, {
+                    tagName: element.tagName,
+                    className: element.className,
+                    id: element.id,
+                    dataset: element.dataset
+                });
+            });
+        }
+    });
+
     calendar.on('beforeCreateEvent', (eventObj) => {
       // Créer un nouvel événement avec un ID unique et l'ajouter au calendrier
       // Utiliser le calendarId sélectionné dans le popup
