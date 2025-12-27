@@ -165,6 +165,19 @@ function setupEventListeners() {
     });
 
     // Evenements liées à tui-calendar
+    calendar.on('beforeCreateEvent', (eventObj) => {
+      // Créer un nouvel événement avec un ID unique et l'ajouter au calendrier
+      // Utiliser le calendarId sélectionné dans le popup
+      const newEvent = {
+        ...eventObj,
+        id: String(Date.now()),
+        // Conserver le calendarId qui a été sélectionné dans le popup
+        calendarId: eventObj.calendarId || 'scheduled'
+      };
+      calendar.createEvents([newEvent]);
+      console.log('Événement créé !', newEvent);
+    });
+
     calendar.on('beforeUpdateEvent', ({ event, changes }) => {
       calendar.updateEvent(event.id, event.calendarId, changes);
     });
