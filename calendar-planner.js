@@ -2,8 +2,8 @@
  * Calendar Planner - Intégration Toast UI Calendar avec Taskwarrior
  * Permet de glisser-déposer des tâches non planifiées dans le calendrier
  */
-//
-//===================================
+
+// ===================================
 // Variables globales
 // ===================================
 let calendar;
@@ -13,6 +13,8 @@ let currentFilter = {
     pool: 'all',
     sort: 'urgency'
 };
+let selectedTaskCard = null;
+let selectedTaskData = null;
 
 // ===================================
 // Initialisation
@@ -21,6 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeCalendar();
     setupEventListeners();
     loadTasks();
+    console.log('SetupTasksSelection');
+    console.log('Setup Task Selection Done');
 });
 
 // ===================================
@@ -69,14 +73,12 @@ function initializeCalendar() {
                 name: 'Pool Pro',
                 backgroundColor: '#28a745',
                 borderColor: '#1e7e34',
-                dragBackgroundColor: '#28a745'
             },
             {
                 id: 'perso',
                 name: 'Pool Perso',
                 backgroundColor: '#ffc107',
                 borderColor: '#e0a800',
-                dragBackgroundColor: '#ffc107'
             }
         ]
     });
@@ -179,6 +181,7 @@ function setupEventListeners() {
 
 }
 
+
 // ===================================
 // Chargement des tâches depuis l'API
 // ===================================
@@ -196,6 +199,9 @@ function loadTasks() {
                 unplannedTasks = initialTasks.filter(task => !task.scheduled);
                 console.log(`${unplannedTasks.length} tâches non planifiées trouvées`);
                 filterAndDisplayTasks();
+
+                //Obligé de mettre
+                setupTaskSelection();
                 
                 // Charger les tâches planifiées
                 console.log('Chargement des tâches planifiées...');
@@ -333,6 +339,54 @@ function createCalendarEvent(task, scheduledDate) {
 }
 
 // ===================================
+// Configuration de la sélection des tâches
+// ===================================
+function setupTaskSelection() {
+    const taskCards = document.querySelectorAll('.task-card');
+    
+    console.log('Setting up event listeners for ' + taskCards.length + ' task cards');
+
+    taskCards.forEach(card => {
+        const taskData = JSON.parse(card.dataset.taskData);
+        const taskDescription = taskData.description || 'Unnamed task';
+        
+        card.addEventListener('click', function(e) {
+            console.log('Event listener added for task: ' + taskDescription);
+            handleTaskCardClick(this);
+        });
+    });
+}
+
+function handleTaskCardClick(cardElement) {
+    console.log('Evenement declenché !');
+    // Deselect currently selected card if it's different
+    if (selectedTaskCard && selectedTaskCard !== cardElement) {
+        selectedTaskCard.classList.remove('selected');
+    }
+
+    // Toggle selection on clicked card
+    if (selectedTaskCard === cardElement) {
+        // Clicking the same card again - deselect it
+        cardElement.classList.remove('selected');
+        selectedTaskCard = null;
+        selectedTaskData = null;
+    } else {
+        // Select the new card
+        cardElement.classList.add('selected');
+        selectedTaskCard = cardElement;
+        selectedTaskData = JSON.parse(cardElement.dataset.taskData);
+        
+        console.log('Task selected:', selectedTaskData.description);
+    }
+}
+// ===================================
+// Fonction pour obtenir la tâche sélectionnée
+// ===================================
+function getSelectedTask() {
+    return selectedTaskData;
+}
+
+// ===================================
 // Filtrer et afficher les tâches non planifiées
 // ===================================
 function filterAndDisplayTasks() {
@@ -388,8 +442,6 @@ function displayUnplannedTasks(tasks) {
 
     container.innerHTML = tasks.map(task => createTaskCard(task)).join('');
 
-    // Ajouter les événements de drag and drop
-    setupDragAndDrop();
 }
 
 // ===================================
@@ -420,7 +472,6 @@ function createTaskCard(task) {
 
     return `
         <div class="task-card" 
-             draggable="true" 
              data-task-id="${task.uuid}"
              data-task-data='${JSON.stringify(task).replace(/'/g, "&apos;")}'>
             <div class="task-card-header">
@@ -440,8 +491,6 @@ function createTaskCard(task) {
         </div>
     `;
 }
-
-
 
 
 // ===================================

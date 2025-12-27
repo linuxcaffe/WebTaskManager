@@ -337,6 +337,19 @@ body {
     transform: translateY(-2px);
 }
 
+/* Selected task card state */
+.task-card.selected {
+    border-color: var(--primary-color);
+    background-color: rgba(74, 144, 226, 0.05);
+    box-shadow: 0 0 0 2px var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.task-card.selected .task-priority {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
 .task-card.dragging {
     opacity: 0.5;
     cursor: grabbing;
