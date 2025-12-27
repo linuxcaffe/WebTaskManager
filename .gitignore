@@ -19,6 +19,7 @@ __pycache__/
 
 #Documentation
 relevant_documentation/
+docs/tui-calendar/
 
 # Fichiers de cache et logs
 *.log
