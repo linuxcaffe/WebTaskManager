@@ -3,7 +3,7 @@
  * Permet de glisser-déposer des tâches non planifiées dans le calendrier
  */
 
-// ===================================
+//===================================
 // Variables globales
 // ===================================
 let calendar;
@@ -174,7 +174,7 @@ function setupEventListeners() {
         tempEventData = null;
         
         calendar.createEvents([newEvent]);
-        console.log('Event created with modified data:', newEvent);
+        //console.log('Event created with modified data:', newEvent);
         return; // Prevent default creation
       }
       
@@ -185,7 +185,7 @@ function setupEventListeners() {
         calendarId: eventObj.calendarId || 'scheduled'
       };
       calendar.createEvents([newEvent]);
-      console.log('Event created with default data:', newEvent);
+      //console.log('Event created with default data:', newEvent);
     });
 
     calendar.on('beforeUpdateEvent', ({ event, changes }) => {
@@ -200,30 +200,8 @@ function setupEventListeners() {
 }
 
 function handleSelectDateTimeEvent(eventInfo) {
-    console.log('Event selectDateTime:', {
-        start: eventInfo.start,
-        end: eventInfo.end,
-        isAllday: eventInfo.isAllday,
-        gridSelectionElements: eventInfo.gridSelectionElements
-    });
-
-    // Additional logging for the grid elements
-    if (eventInfo.gridSelectionElements && eventInfo.gridSelectionElements.length > 0) {
-        console.log('Grid selection elements:', eventInfo.gridSelectionElements);
-        eventInfo.gridSelectionElements.forEach((element, index) => {
-            console.log(`Element ${index}:`, {
-                tagName: element.tagName,
-                className: element.className,
-                id: element.id,
-                dataset: element.dataset
-            });
-        });
-    }
-
     // If a task is selected, adjust the end date based on task duration
     if (selectedTaskData) {
-        console.log('Selected task found, adjusting end date based on duration');
-        
         // Parse the task duration
         const duration = parseEstTime(selectedTaskData.estTime);
         
@@ -231,7 +209,6 @@ function handleSelectDateTimeEvent(eventInfo) {
             // Calculate new end date based on task duration
             const newEndDate = new Date(eventInfo.start.getTime() + duration * 60000);
             
-            console.log(`Adjusting end date from ${eventInfo.end} to ${newEndDate} (duration: ${duration} minutes)`);
              // Update the form fields in the popup
             setTimeout(() => {
                 // Find the input fields by class and name attribute
@@ -242,14 +219,12 @@ function handleSelectDateTimeEvent(eventInfo) {
                     // Format the new end date as 'YYYY-MM-DD HH:MM'
                     const formattedEndDate = formatDateTimeForInput(newEndDate);
                     endInput.value = formattedEndDate;
-                    console.log('Updated end date field:', formattedEndDate);
                 } else {
                     console.warn('End date input field not found');
                 }
                 
                 if (titleInput) {
                     titleInput.value = selectedTaskData.description;
-                    console.log('Updated title field:', selectedTaskData.description);
                 } else {
                     console.warn('Title input field not found');
                 }
@@ -262,12 +237,9 @@ function handleSelectDateTimeEvent(eventInfo) {
                 title: selectedTaskData.description,
                 isAllday: eventInfo.isAllday
             };
-            
-            console.log('Stored temp event data:', tempEventData);
         }
     }
 }
-
 
 // ===================================
 // Chargement des tâches depuis l'API
