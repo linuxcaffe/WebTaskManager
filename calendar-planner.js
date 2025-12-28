@@ -160,33 +160,7 @@ function setupEventListeners() {
     // Evenements liées à tui-calendar
     calendar.on('selectDateTime', handleSelectDateTimeEvent);
 
-    calendar.on('beforeCreateEvent', (eventObj) => {
-      // Use the temporarily stored event data if available
-      if (tempEventData) {
-        // Create the event with our modified data
-        const newEvent = {
-            ...tempEventData,
-            id: String(Date.now()),
-            calendarId: eventObj.calendarId || 'scheduled'
-        };
-        
-        // Clear the temporary data
-        tempEventData = null;
-        
-        calendar.createEvents([newEvent]);
-        //console.log('Event created with modified data:', newEvent);
-        return; // Prevent default creation
-      }
-      
-      // Default behavior if no temp data
-      const newEvent = {
-        ...eventObj,
-        id: String(Date.now()),
-        calendarId: eventObj.calendarId || 'scheduled'
-      };
-      calendar.createEvents([newEvent]);
-      //console.log('Event created with default data:', newEvent);
-    });
+    calendar.on('beforeCreateEvent', handleBeforeCreateEvent);
 
     calendar.on('beforeUpdateEvent', ({ event, changes }) => {
       calendar.updateEvent(event.id, event.calendarId, changes);
@@ -243,6 +217,36 @@ function handleSelectDateTimeEvent(eventInfo) {
 }
 
 // ===================================
+// Fonction pour gérer l'événement beforeCreateEvent
+// ===================================
+function handleBeforeCreateEvent(eventObj) {
+    // Use the temporarily stored event data if available
+    if (tempEventData) {
+        // Create the event with our modified data
+        const newEvent = {
+            ...tempEventData,
+            id: String(Date.now()),
+            calendarId: eventObj.calendarId || 'scheduled'
+        };
+        
+        // Clear the temporary data
+        tempEventData = null;
+        
+        calendar.createEvents([newEvent]);
+        //console.log('Event created with modified data:', newEvent);
+        return; // Prevent default creation
+    }
+    
+    // Default behavior if no temp data
+    const newEvent = {
+        ...eventObj,
+        id: String(Date.now()),
+        calendarId: eventObj.calendarId || 'scheduled'
+    };
+    calendar.createEvents([newEvent]);
+}
+
+// =================================== 
 // Chargement des tâches depuis l'API
 // ===================================
 function loadTasks() {
