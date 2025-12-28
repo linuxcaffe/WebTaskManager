@@ -3,7 +3,7 @@
  * Permet de glisser-déposer des tâches non planifiées dans le calendrier
  */
 
-// ===================================
+
 // Variables globales
 // ===================================
 let calendar;
@@ -201,8 +201,8 @@ function setupEventListeners() {
                     const titleInput = document.querySelector('input.toastui-calendar-content[name="title"]');
                     
                     if (endInput) {
-                        // Format the new end date for the input field (ISO format expected by Toast UI)
-                        const formattedEndDate = newEndDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
+                        // Format the new end date as 'YYYY-MM-DD HH:MM'
+                        const formattedEndDate = formatDateTimeForInput(newEndDate);
                         endInput.value = formattedEndDate;
                         console.log('Updated end date field:', formattedEndDate);
                     } else {
@@ -662,6 +662,19 @@ function parseEstTime(estTime) {
     });
 
     return minutes;
+}
+
+function formatDateTimeForInput(date) {
+    // Format a Date object as 'YYYY-MM-DD HH:MM' (with space separator)
+    if (!date || !(date instanceof Date)) return '';
+    
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
 function formatDuration(minutes) {
