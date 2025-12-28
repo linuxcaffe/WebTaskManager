@@ -3,7 +3,6 @@
  * Permet de glisser-déposer des tâches non planifiées dans le calendrier
  */
 
-
 // ===================================
 // Variables globales
 // ===================================
@@ -159,74 +158,7 @@ function setupEventListeners() {
     });
 
     // Evenements liées à tui-calendar
-    calendar.on('selectDateTime', (eventInfo) => {
-        console.log('Event selectDateTime:', {
-            start: eventInfo.start,
-            end: eventInfo.end,
-            isAllday: eventInfo.isAllday,
-            gridSelectionElements: eventInfo.gridSelectionElements
-        });
-
-        // Additional logging for the grid elements
-        if (eventInfo.gridSelectionElements && eventInfo.gridSelectionElements.length > 0) {
-            console.log('Grid selection elements:', eventInfo.gridSelectionElements);
-            eventInfo.gridSelectionElements.forEach((element, index) => {
-                console.log(`Element ${index}:`, {
-                    tagName: element.tagName,
-                    className: element.className,
-                    id: element.id,
-                    dataset: element.dataset
-                });
-            });
-        }
-
-        // If a task is selected, adjust the end date based on task duration
-        if (selectedTaskData) {
-            console.log('Selected task found, adjusting end date based on duration');
-            
-            // Parse the task duration
-            const duration = parseEstTime(selectedTaskData.estTime);
-            
-            if (duration) {
-                // Calculate new end date based on task duration
-                const newEndDate = new Date(eventInfo.start.getTime() + duration * 60000);
-                
-                console.log(`Adjusting end date from ${eventInfo.end} to ${newEndDate} (duration: ${duration} minutes)`);
-                // Update the form fields in the popup
-                setTimeout(() => {
-                    // Find the input fields by class and name attribute
-                    const endInput = document.querySelector('input.toastui-calendar-content[name="end"]');
-                    const titleInput = document.querySelector('input.toastui-calendar-content[name="title"]');
-                    
-                    if (endInput) {
-                        // Format the new end date as 'YYYY-MM-DD HH:MM'
-                        const formattedEndDate = formatDateTimeForInput(newEndDate);
-                        endInput.value = formattedEndDate;
-                        console.log('Updated end date field:', formattedEndDate);
-                    } else {
-                        console.warn('End date input field not found');
-                    }
-                    
-                    if (titleInput) {
-                        titleInput.value = selectedTaskData.description;
-                        console.log('Updated title field:', selectedTaskData.description);
-                    } else {
-                        console.warn('Title input field not found');
-                    }
-                }, 100);
-
-                // Store the modified event data for use in beforeCreateEvent
-                tempEventData = {
-                    start: eventInfo.start,
-                    end: newEndDate,
-                    title: selectedTaskData.description,
-                    isAllday: eventInfo.isAllday
-                };
-                
-                console.log('Stored temp event data:', tempEventData);
-            }
-        }
-    });
+    calendar.on('selectDateTime', handleSelectDateTimeEvent);
 
     calendar.on('beforeCreateEvent', (eventObj) => {
       // Use the temporarily stored event data if available
@@ -265,6 +197,75 @@ function setupEventListeners() {
       calendar.deleteEvent(event.id, event.calendarId);
     });
 
+}
+
+function handleSelectDateTimeEvent(eventInfo) {
+    console.log('Event selectDateTime:', {
+        start: eventInfo.start,
+        end: eventInfo.end,
+        isAllday: eventInfo.isAllday,
+        gridSelectionElements: eventInfo.gridSelectionElements
+    });
+
+    // Additional logging for the grid elements
+    if (eventInfo.gridSelectionElements && eventInfo.gridSelectionElements.length > 0) {
+        console.log('Grid selection elements:', eventInfo.gridSelectionElements);
+        eventInfo.gridSelectionElements.forEach((element, index) => {
+            console.log(`Element ${index}:`, {
+                tagName: element.tagName,
+                className: element.className,
+                id: element.id,
+                dataset: element.dataset
+            });
+        });
+    }
+
+    // If a task is selected, adjust the end date based on task duration
+    if (selectedTaskData) {
+        console.log('Selected task found, adjusting end date based on duration');
+        
+        // Parse the task duration
+        const duration = parseEstTime(selectedTaskData.estTime);
+        
+        if (duration) {
+            // Calculate new end date based on task duration
+            const newEndDate = new Date(eventInfo.start.getTime() + duration * 60000);
+            
+            console.log(`Adjusting end date from ${eventInfo.end} to ${newEndDate} (duration: ${duration} minutes)`);
+             // Update the form fields in the popup
+            setTimeout(() => {
+                // Find the input fields by class and name attribute
+                const endInput = document.querySelector('input.toastui-calendar-content[name="end"]');
+                const titleInput = document.querySelector('input.toastui-calendar-content[name="title"]');
+                
+                if (endInput) {
+                    // Format the new end date as 'YYYY-MM-DD HH:MM'
+                    const formattedEndDate = formatDateTimeForInput(newEndDate);
+                    endInput.value = formattedEndDate;
+                    console.log('Updated end date field:', formattedEndDate);
+                } else {
+                    console.warn('End date input field not found');
+                }
+                
+                if (titleInput) {
+                    titleInput.value = selectedTaskData.description;
+                    console.log('Updated title field:', selectedTaskData.description);
+                } else {
+                    console.warn('Title input field not found');
+                }
+            }, 100);   
+
+            // Store the modified event data for use in beforeCreateEvent
+            tempEventData = {
+                start: eventInfo.start,
+                end: newEndDate,
+                title: selectedTaskData.description,
+                isAllday: eventInfo.isAllday
+            };
+            
+            console.log('Stored temp event data:', tempEventData);
+        }
+    }
 }
 
 
