@@ -177,6 +177,47 @@ function setupEventListeners() {
                 });
             });
         }
+
+        // If a task is selected, adjust the end date based on task duration
+        if (selectedTaskData) {
+            console.log('Selected task found, adjusting end date based on duration');
+            
+            // Parse the task duration
+            const duration = parseEstTime(selectedTaskData.estTime);
+            
+            if (duration) {
+                // Calculate new end date based on task duration
+                const newEndDate = new Date(eventInfo.start.getTime() + duration * 60000);
+                
+                console.log(`Adjusting end date from ${eventInfo.end} to ${newEndDate} (duration: ${duration} minutes)`);
+                
+                // Update the event info with the new end date
+                eventInfo.end = newEndDate;
+                
+                // Update the form fields in the popup
+                setTimeout(() => {
+                    // Find the input fields by class and name attribute
+                    const endInput = document.querySelector('input.toastui-calendar-content[name="end"]');
+                    const titleInput = document.querySelector('input.toastui-calendar-content[name="title"]');
+                    
+                    if (endInput) {
+                        // Format the new end date for the input field (ISO format expected by Toast UI)
+                        const formattedEndDate = newEndDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
+                        endInput.value = formattedEndDate;
+                        console.log('Updated end date field:', formattedEndDate);
+                    } else {
+                        console.warn('End date input field not found');
+                    }
+                    
+                    if (titleInput) {
+                        titleInput.value = selectedTaskData.description;
+                        console.log('Updated title field:', selectedTaskData.description);
+                    } else {
+                        console.warn('Title input field not found');
+                    }
+                }, 100); // Small delay to ensure the popup is fully rendered
+            }
+        }
     });
 
     calendar.on('beforeCreateEvent', (eventObj) => {
