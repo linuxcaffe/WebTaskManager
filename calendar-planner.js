@@ -4,6 +4,7 @@
  */
 
 
+// ===================================
 // Variables globales
 // ===================================
 let calendar;
@@ -15,6 +16,7 @@ let currentFilter = {
 };
 let selectedTaskCard = null;
 let selectedTaskData = null;
+let tempEventData = null; // Temporary storage for modified event dataVariables globales
 
 // ===================================
 // Initialisation
@@ -190,10 +192,6 @@ function setupEventListeners() {
                 const newEndDate = new Date(eventInfo.start.getTime() + duration * 60000);
                 
                 console.log(`Adjusting end date from ${eventInfo.end} to ${newEndDate} (duration: ${duration} minutes)`);
-                
-                // Update the event info with the new end date
-                eventInfo.end = newEndDate;
-                
                 // Update the form fields in the popup
                 setTimeout(() => {
                     // Find the input fields by class and name attribute
@@ -215,22 +213,47 @@ function setupEventListeners() {
                     } else {
                         console.warn('Title input field not found');
                     }
-                }, 100); // Small delay to ensure the popup is fully rendered
+                }, 100);
+
+                // Store the modified event data for use in beforeCreateEvent
+                tempEventData = {
+                    start: eventInfo.start,
+                    end: newEndDate,
+                    title: selectedTaskData.description,
+                    isAllday: eventInfo.isAllday
+                };
+                
+                console.log('Stored temp event data:', tempEventData);
             }
         }
     });
 
     calendar.on('beforeCreateEvent', (eventObj) => {
-      // Créer un nouvel événement avec un ID unique et l'ajouter au calendrier
-      // Utiliser le calendarId sélectionné dans le popup
+      // Use the temporarily stored event data if available
+      if (tempEventData) {
+        // Create the event with our modified data
+        const newEvent = {
+            ...tempEventData,
+            id: String(Date.now()),
+            calendarId: eventObj.calendarId || 'scheduled'
+        };
+        
+        // Clear the temporary data
+        tempEventData = null;
+        
+        calendar.createEvents([newEvent]);
+        console.log('Event created with modified data:', newEvent);
+        return; // Prevent default creation
+      }
+      
+      // Default behavior if no temp data
       const newEvent = {
         ...eventObj,
         id: String(Date.now()),
-        // Conserver le calendarId qui a été sélectionné dans le popup
         calendarId: eventObj.calendarId || 'scheduled'
       };
       calendar.createEvents([newEvent]);
-      console.log('Événement créé !', newEvent);
+      console.log('Event created with default data:', newEvent);
     });
 
     calendar.on('beforeUpdateEvent', ({ event, changes }) => {
