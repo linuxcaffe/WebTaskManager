@@ -220,30 +220,25 @@ function handleSelectDateTimeEvent(eventInfo) {
 // Fonction pour gérer l'événement beforeCreateEvent
 // ===================================
 function handleBeforeCreateEvent(eventObj) {
+    let newEvent;
     // Use the temporarily stored event data if available
     if (tempEventData) {
         // Create the event with our modified data
-        const newEvent = {
+        newEvent = {
             ...tempEventData,
-            id: String(Date.now()),
             calendarId: eventObj.calendarId || 'scheduled'
         };
-        
-        // Clear the temporary data
-        tempEventData = null;
-        
-        calendar.createEvents([newEvent]);
-        //console.log('Event created with modified data:', newEvent);
-        return; // Prevent default creation
+        tempEventData = null;// Clear the temporary data
+    } else {
+        // Default behavior if no temp data
+        newEvent = {
+            ...eventObj,
+            id: 'toast_' + String(Date.now()),
+            calendarId: eventObj.calendarId || 'scheduled'
+        };
     }
-    
-    // Default behavior if no temp data
-    const newEvent = {
-        ...eventObj,
-        id: String(Date.now()),
-        calendarId: eventObj.calendarId || 'scheduled'
-    };
     calendar.createEvents([newEvent]);
+    console.log('Event created with modified data:', newEvent);
 }
 
 // =================================== 
