@@ -237,6 +237,35 @@ function handleBeforeCreateEvent(eventObj) {
             calendarId: eventObj.calendarId || 'scheduled'
         };
     }
+    // Sync to backend if this is a TaskWarrior task (not a toast_ prefixed ID)
+    if (newEvent.id && !newEvent.id.startsWith('toast_')) {
+        // Prepare task data in the format expected by the backend
+        const modifiedTaskData = {
+            description: newEvent.title,
+            scheduled: newEvent.start ? newEvent.start.toISOString() : null
+        };
+
+        // Make the fetch call to backend using the same pattern as saveTaskEdit
+        fetch(`/api/task/${newEvent.id}/modify`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(modifiedTaskData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                console.error('Failed to sync task to backend:', data.error);
+                // Could add user notification here if needed
+            }
+        })
+        .catch(error => {
+            console.error('Network error syncing task:', error);
+            // Could add user notification here if needed
+        });
+    }
+
     calendar.createEvents([newEvent]);
     console.log('Event created with modified data:', newEvent);
 }
