@@ -232,6 +232,7 @@ function handleSelectDateTimeEvent(eventInfo) {
 
             // Store the modified event data for use in beforeCreateEvent
             tempEventData = {
+                id: selectedTaskData.uuid,
                 start: eventInfo.start,
                 end: newEndDate,
                 title: selectedTaskData.description,
