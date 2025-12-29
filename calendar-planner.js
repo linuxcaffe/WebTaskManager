@@ -3,7 +3,7 @@
  * Permet de glisser-déposer des tâches non planifiées dans le calendrier
  */
 
-//===================================
+
 // Variables globales
 // ===================================
 let calendar;
@@ -242,7 +242,7 @@ function handleBeforeCreateEvent(eventObj) {
         // Prepare task data in the format expected by the backend
         const modifiedTaskData = {
             description: newEvent.title,
-            scheduled: newEvent.start ? newEvent.start.toISOString() : null
+            scheduled: newEvent.start ? DateFromISOtoTW(newEvent.start.toISOString()) : null
         };
 
         // Make the fetch call to backend using the same pattern as saveTaskEdit
@@ -689,6 +689,55 @@ function parseEstTime(estTime) {
     return minutes;
 }
 
+function DateFromISOtoTW(isoString) {
+    // Convert ISO string to YYYY-MM-DDTHH:MM:SS format
+    // Input format: 20251220T120000Z or 2025-12-20T12:00:00Z
+    // Output format: 2025-12-20T12:00:00
+    
+    if (!isoString) return null;
+    
+    // Handle both formats: 20251220T120000Z and 2025-12-20T12:00:00Z
+    let date;
+    
+    // First try the compact format (20251220T120000Z)
+    if (/^\d{8}T\d{6}Z$/.test(isoString)) {
+        // Convert 20251220T120000Z to 2025-12-20T12:00:00
+        const formatted = isoString.replace(
+            /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
+            '$1-$2-$3T$4:$5:$6'
+        );
+        return formatted;
+    }
+    // Try the standard ISO format (2025-12-20T12:00:00Z)
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(isoString)) {
+        // Remove the Z at the end
+        return isoString.slice(0, -1);
+    }
+    // Try format without Z (2025-12-20T12:00:00)
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(isoString)) {
+        return isoString;
+    }
+    
+    // If format doesn't match, try to parse as Date and format
+    try {
+        date = new Date(isoString);
+        if (!isNaN(date.getTime())) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            
+            return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+        }
+    } catch (e) {
+        console.error('Error parsing date:', e);
+        return null;
+    }
+    
+    return null;
+}
 function formatDateTimeForInput(date) {
     // Format a Date object as 'YYYY-MM-DD HH:MM' (with space separator)
     if (!date || !(date instanceof Date)) return '';
