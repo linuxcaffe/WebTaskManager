@@ -274,27 +274,29 @@ def add_task():
     if data.get('duration'):
         command_parts.append(f'estTime:{data["duration"]}')
     
-    # Créer la tâche
-    command = f'task {" ".join(command_parts)} export'
-    result = run_task_command(command)
+    # Créer la tâche sans export pour éviter que export soit inclus dans la description
+    command = f'task {" ".join(command_parts)}'
+    create_result = run_task_command(command)
     
-    # Vérifier si la création a réussi
-    if result['success'] and result['stdout'].strip():
-        try:
-            task = json.loads(result['stdout'])
-            if task:  # Vérifier que la liste des tâches n'est pas vide
-                return jsonify({
-                    'success': True,
-                    'message': 'Task created successfully',
-                    'task': task[0]  # Prendre la première tâche créée
-                })
-        except (json.JSONDecodeError, IndexError) as e:
-            print(f"Error parsing task data: {e}")
+    # Si la création a réussi, exporter la dernière tâche créée pour obtenir les données complètes
+    if create_result['success']:
+        export_result = run_task_command('task +LATEST export')
+        if export_result['success'] and export_result['stdout'].strip():
+            try:
+                task = json.loads(export_result['stdout'])
+                if task:  # Vérifier que la liste des tâches n'est pas vide
+                    return jsonify({
+                        'success': True,
+                        'message': 'Task created successfully',
+                        'task': task[0]  # Prendre la première tâche créée
+                    })
+            except (json.JSONDecodeError, IndexError) as e:
+                print(f"Error parsing task data: {e}")
     
     # En cas d'erreur
     return jsonify({
-        'success': result.get('success', False),
-        'error': result.get('stderr', 'Failed to create task'),
+        'success': create_result.get('success', False),
+        'error': create_result.get('stderr', 'Failed to create task'),
         'task': None
     })
 

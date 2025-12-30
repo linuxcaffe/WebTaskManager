@@ -15,7 +15,7 @@ let currentFilter = {
 };
 let selectedTaskCard = null;
 let selectedTaskData = null;
-let tempEventData = null; // Temporary storage for modified event dataVariables globales
+let tempEventData = null; 
 
 /**
  * Initialisation
@@ -237,8 +237,45 @@ function handleBeforeCreateEvent(eventObj) {
             calendarId: eventObj.calendarId || 'scheduled'
         };
     }
+    
+    // Handle toast-prefixed events (new tasks)
+    if (newEvent.id && newEvent.id.startsWith('toast_')) {
+        // Create new task via API
+        const newTaskData = {
+            description: newEvent.title,
+            scheduled: newEvent.start ? DateFromISOtoTW(newEvent.start.toISOString()) : null
+        };
+
+        // Call the add task endpoint
+        fetch('/api/task/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(newTaskData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.task && data.task.uuid) {
+                // Update the event with the real UUID
+                newEvent.id = data.task.uuid;
+                // Re-create the event with the new ID
+                calendar.createEvents([newEvent]);
+                console.log('Task created successfully with UUID:', newEvent.id);
+            } else {
+                console.error('Failed to create task:', data.error || 'Unknown error');
+                // Show error to user
+                showError('Failed to create task: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Network error creating task:', error);
+            // Show error to user
+            showError('Network error creating task: ' + error.message);
+        });
+    }
     // Sync to backend if this is a TaskWarrior task (not a toast_ prefixed ID)
-    if (newEvent.id && !newEvent.id.startsWith('toast_')) {
+    else if (newEvent.id && !newEvent.id.startsWith('toast_')) {
         // Prepare task data in the format expected by the backend
         const modifiedTaskData = {
             description: newEvent.title,
@@ -269,8 +306,6 @@ function handleBeforeCreateEvent(eventObj) {
     calendar.createEvents([newEvent]);
     console.log('Event created with modified data:', newEvent);
 }
-
-
 
 /**
  * Chargement des tâches depuis l'API 
@@ -660,6 +695,37 @@ function updateCalendarTitle() {
 /**
  * Fonctions utilitaires 
  */
+function parseEstTime(estTime) {
+    if (!estTime) return null;
+    
+    // Handle ISO 8601 duration format (PT2H30M) that TaskWarrior uses
+    if (estTime.startsWith('PT')) {
+        const match = estTime.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+        if (match) {
+            const hours = parseInt(match[1] || 0);
+            const minutes = parseInt(match[2] || 0);
+            const seconds = parseInt(match[3] || 0);
+            
+            return hours * 60 + minutes + Math.round(seconds / 60);
+        }
+    }
+    
+    // Fallback for old format: "1h30min" ou "30min" ou "1h"
+    const match = estTime.match(/(\d+)h|(\d+)min/g);
+    if (!match) return null;
+
+    let minutes = 0;
+    match.forEach(part => {
+        if (part.includes('h')) {
+            minutes += parseInt(part) * 60;
+        } else if (part.includes('min')) {
+            minutes += parseInt(part);
+        }
+    });
+
+    return minutes;
+}
+
 function DateFromISOtoTW(isoString) {
     // Convert ISO string to YYYY-MM-DDTHH:MM:SS format
     // Input format: 20251220T120000Z or 2025-12-20T12:00:00Z
