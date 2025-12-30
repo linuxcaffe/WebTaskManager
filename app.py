@@ -146,7 +146,7 @@ def get_projects():
             'error': result['stderr']
         }), 500
 
-@app.route('/api/task/<int:task_id>/start', methods=['POST'])
+@app.route('/api/task/<task_id>/start', methods=['POST'])
 def start_task(task_id):
     """Start a task"""
     result = run_task_command(f'task {task_id} start')
@@ -155,7 +155,7 @@ def start_task(task_id):
         'message': result['stdout'] if result['success'] else result['stderr']
     })
 
-@app.route('/api/task/<int:task_id>/stop', methods=['POST'])
+@app.route('/api/task/<task_id>/stop', methods=['POST'])
 def stop_task(task_id):
     """Stop a task"""
     result = run_task_command(f'task {task_id} stop')
@@ -164,7 +164,7 @@ def stop_task(task_id):
         'message': result['stdout'] if result['success'] else result['stderr']
     })
 
-@app.route('/api/task/<int:task_id>/done', methods=['POST'])
+@app.route('/api/task/<task_id>/done', methods=['POST'])
 def complete_task(task_id):
     """Mark a task as done"""
     result = run_task_command(f'task {task_id} done')
@@ -173,7 +173,7 @@ def complete_task(task_id):
         'message': result['stdout'] if result['success'] else result['stderr']
     })
 
-@app.route('/api/task/<int:task_id>/delete', methods=['DELETE'])
+@app.route('/api/task/<task_id>/delete', methods=['DELETE'])
 def delete_task(task_id):
     """Delete a task"""
     result = run_task_command(f'task rc.confirmation=off {task_id} delete')
@@ -182,7 +182,7 @@ def delete_task(task_id):
         'message': result['stdout'] if result['success'] else result['stderr']
     })
 
-@app.route('/api/task/<int:task_id>/modify', methods=['PUT'])
+@app.route('/api/task/<task_id>/modify', methods=['PUT'])
 def modify_task(task_id):
     """Modify a task"""
     data = request.get_json()
