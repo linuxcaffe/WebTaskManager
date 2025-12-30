@@ -3,9 +3,9 @@
  * Permet de glisser-déposer des tâches non planifiées dans le calendrier
  */
 
-
-// Variables globales
-// ===================================
+/**
+ * Valriables globales
+ */
 let calendar;
 let unplannedTasks = [];
 let allTasks = [];
@@ -17,9 +17,9 @@ let selectedTaskCard = null;
 let selectedTaskData = null;
 let tempEventData = null; // Temporary storage for modified event dataVariables globales
 
-// ===================================
-// Initialisation
-// ===================================
+/**
+ * Initialisation
+ */
 document.addEventListener('DOMContentLoaded', () => {
     initializeCalendar();
     setupEventListeners();
@@ -28,9 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Setup Task Selection Done');
 });
 
-// ===================================
-// Initialisation du calendrier Toast UI
-// ===================================
+/**
+ * Initialisation du calendrier Toast UI
+ */
 function initializeCalendar() {
     const calendarEl = document.getElementById('calendar');
     
@@ -87,9 +87,9 @@ function initializeCalendar() {
     updateCalendarTitle();
 }
 
-// ===================================
-// Configuration des écouteurs d'événements
-// ===================================
+/**
+ * Configuration des écouteurs d'événements 
+ */
 function setupEventListeners() {
     // Navigation du calendrier
     const prevBtn = document.getElementById('prev-btn');
@@ -216,9 +216,9 @@ function handleSelectDateTimeEvent(eventInfo) {
     }
 }
 
-// ===================================
-// Fonction pour gérer l'événement beforeCreateEvent
-// ===================================
+/**
+ * Fonction pour gérer l'événement beforeCreateEvent 
+ */
 function handleBeforeCreateEvent(eventObj) {
     let newEvent;
     // Use the temporarily stored event data if available
@@ -270,9 +270,11 @@ function handleBeforeCreateEvent(eventObj) {
     console.log('Event created with modified data:', newEvent);
 }
 
-// =================================== 
-// Chargement des tâches depuis l'API
-// ===================================
+
+
+/**
+ * Chargement des tâches depuis l'API 
+ */
 function loadTasks() {
     console.log('Chargement des tâches...');
     // Charger les tâches non planifiées
@@ -327,9 +329,9 @@ function loadTasks() {
         });
 }
 
-// ===================================
-// Traitement des tâches pour le calendrier
-// ===================================
+/**
+ * Traitement des tâches pour le calendrier 
+ */
 function processTasksForCalendar() {
     // Séparer les tâches planifiées et non planifiées
     const scheduledTasks = [];
@@ -366,9 +368,9 @@ function processTasksForCalendar() {
     calendar.render();
 }
 
-// ===================================
-// Créer un événement calendrier depuis une tâche
-// ===================================
+/**
+ * Créer un événement calendrier depuis une tâche 
+ */
 function createCalendarEvent(task, scheduledDate) {
     // Vérifier et formater la date de planification au format ISO 8601 (20251220T120000Z)
     let start;
@@ -423,9 +425,9 @@ function createCalendarEvent(task, scheduledDate) {
     };
 }
 
-// ===================================
-// Configuration de la sélection des tâches
-// ===================================
+/**
+ * Configuration de la sélection des tâches 
+ */
 function handleTaskCardClick(cardElement) {
     console.log('Evenement declenché !');
     // Deselect currently selected card if it's different
@@ -448,16 +450,16 @@ function handleTaskCardClick(cardElement) {
         console.log('Task selected:', selectedTaskData.description);
     }
 }
-// ===================================
-// Fonction pour obtenir la tâche sélectionnée
-// ===================================
+/**
+ * Fonction pour obtenir la tâche sélectionnée 
+ */
 function getSelectedTask() {
     return selectedTaskData;
 }
 
-// ===================================
-// Filtrer et afficher les tâches non planifiées
-// ===================================
+/**
+ * Filtrer et afficher les tâches non planifiées 
+ */
 function filterAndDisplayTasks() {
     let filteredTasks = [...unplannedTasks];
 
@@ -490,9 +492,9 @@ function filterAndDisplayTasks() {
     displayUnplannedTasks(filteredTasks);
 }
 
-// ===================================
-// Afficher les tâches non planifiées
-// ===================================
+/**
+ * Afficher les tâches non planifiées 
+ */
 function displayUnplannedTasks(tasks) {
     const container = document.getElementById('unplanned-tasks');
     const countEl = document.getElementById('task-count');
@@ -572,9 +574,9 @@ function createTaskCard(task) {
 
     return card;
 }
-// ===================================
-// Changement de vue du calendrier
-// ===================================
+/**
+ * Changement de vue du calendrier 
+ */
 function changeView(view) {
     calendar.changeView(view);
     
@@ -589,9 +591,9 @@ function changeView(view) {
     updateCalendarTitle();
 }
 
-// ===================================
-// Mise à jour du titre du calendrier
-// ===================================
+/**
+ * Mide à jour du titre du calendrier 
+ */
 function updateCalendarTitle() {
     const titleEl = document.getElementById('calendar-title');
     
@@ -655,40 +657,9 @@ function updateCalendarTitle() {
     }
 }
 
-// ===================================
-// Fonctions utilitaires
-// ===================================
-function parseEstTime(estTime) {
-    if (!estTime) return null;
-    
-    // Handle ISO 8601 duration format (PT2H30M) that TaskWarrior uses
-    if (estTime.startsWith('PT')) {
-        const match = estTime.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-        if (match) {
-            const hours = parseInt(match[1] || 0);
-            const minutes = parseInt(match[2] || 0);
-            const seconds = parseInt(match[3] || 0);
-            
-            return hours * 60 + minutes + Math.round(seconds / 60);
-        }
-    }
-    
-    // Fallback for old format: "1h30min" ou "30min" ou "1h"
-    const match = estTime.match(/(\d+)h|(\d+)min/g);
-    if (!match) return null;
-
-    let minutes = 0;
-    match.forEach(part => {
-        if (part.includes('h')) {
-            minutes += parseInt(part) * 60;
-        } else if (part.includes('min')) {
-            minutes += parseInt(part);
-        }
-    });
-
-    return minutes;
-}
-
+/**
+ * Fonctions utilitaires 
+ */
 function DateFromISOtoTW(isoString) {
     // Convert ISO string to YYYY-MM-DDTHH:MM:SS format
     // Input format: 20251220T120000Z or 2025-12-20T12:00:00Z
