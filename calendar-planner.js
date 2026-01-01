@@ -162,9 +162,7 @@ function setupEventListeners() {
 
     calendar.on('beforeCreateEvent', handleBeforeCreateEvent);
 
-    calendar.on('beforeUpdateEvent', ({ event, changes }) => {
-      calendar.updateEvent(event.id, event.calendarId, changes);
-    });
+    calendar.on('beforeUpdateEvent', handleBeforeUpdateEvent);
 
     // Écouter la suppression
     calendar.on('beforeDeleteEvent', (event) => {
@@ -273,6 +271,46 @@ async function handleBeforeCreateEvent(eventObj) {
 
     calendar.createEvents([newEvent]);
     console.log('Event created :', newEvent);
+}
+
+/**
+ * Fonction pour gérer l'événement beforeUpdateEvent
+ */
+async function handleBeforeUpdateEvent({ event, changes }) {
+    // Only handle TaskWarrior tasks (not toast_ prefixed IDs)
+    if (event.id && !event.id.startsWith('toast_')) {
+        // Prepare task data in the format expected by the backend
+        const modifiedTaskData = {
+            description: changes.title || event.title,
+            scheduled: changes.start ? DateFromISOtoTW(changes.start.toISOString()) : (event.start ? DateFromISOtoTW(event.start.toISOString()) : null)
+        };
+
+        // Add duration if it changed
+        if (changes.end) {
+            const duration = calculateDurationFromEvent({
+                start: changes.start || event.start,
+                end: changes.end || event.end
+            });
+            modifiedTaskData.duration = duration;
+        }
+
+        try {
+            const result = await modifyTaskInBackend(event.id, modifiedTaskData);
+            if (!result.success) {
+                console.error('Failed to sync task update to backend:', result.error);
+                showError('Failed to update task: ' + (result.error || 'Unknown error'));
+                return false; // Prevent the update if backend sync fails
+            }
+            console.log('Task updated successfully:', event.id);
+        } catch (error) {
+            console.error('Error updating task:', error);
+            showError('Error updating task: ' + error.message);
+            return false;
+        }
+    }
+
+    // Allow the update to proceed
+    return true;
 }
 
 /**
