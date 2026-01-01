@@ -244,7 +244,7 @@ function handleBeforeCreateEvent(eventObj) {
         const newTaskData = {
             description: newEvent.title,
             scheduled: newEvent.start ? (newEvent.start instanceof Date ? DateFromISOtoTW(newEvent.start.toISOString()) : DateFromISOtoTW(newEvent.start)) : null,
-            duration: "30min"
+            duration: calculateDurationFromEvent(newEvent)
         };
 
         // Call the add task endpoint
@@ -725,6 +725,58 @@ function parseEstTime(estTime) {
     });
 
     return minutes;
+}
+
+function calculateDurationFromEvent(event) {
+    // Calculate duration between event.start and event.end
+    // Returns ISO 8601 duration format (PT2H30M)
+    
+    if (!event || !event.start || !event.end) {
+        console.warn('Event missing start or end time, using default duration');
+        return 'PT30M'; // Default 30 minutes
+    }
+    
+    try {
+        // Handle cases where start/end might be strings or Date objects
+        const startDate = event.start instanceof Date ? event.start : new Date(event.start);
+        const endDate = event.end instanceof Date ? event.end : new Date(event.end);
+        
+        // Check for invalid dates
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            console.warn('Invalid date format in event, using default duration');
+            return 'PT30M';
+        }
+        
+        // Calculate duration in milliseconds
+        const durationMs = endDate - startDate;
+        
+        // Handle negative or zero duration
+        if (durationMs <= 0) {
+            console.warn('Zero or negative duration, using default duration');
+            return 'PT30M';
+        }
+        
+        // Convert to hours and minutes
+        const durationMinutes = Math.round(durationMs / (1000 * 60));
+        const hours = Math.floor(durationMinutes / 60);
+        const minutes = durationMinutes % 60;
+        
+        // Format as ISO 8601 duration (PT2H30M)
+        let durationString = 'PT';
+        if (hours > 0) {
+            durationString += `${hours}H`;
+        }
+        if (minutes > 0) {
+            durationString += `${minutes}M`;
+        }
+        
+        // Default to PT30M if duration is 0 (shouldn't happen due to above check)
+        return durationString === 'PT' ? 'PT30M' : durationString;
+        
+    } catch (error) {
+        console.error('Error calculating duration:', error);
+        return 'PT30M'; // Fallback to default
+    }
 }
 
 function DateFromISOtoTW(isoString) {
