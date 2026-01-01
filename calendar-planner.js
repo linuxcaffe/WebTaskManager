@@ -282,14 +282,47 @@ async function handleBeforeUpdateEvent({ event, changes }) {
         // Prepare task data in the format expected by the backend
         const modifiedTaskData = {
             description: changes.title || event.title,
-            scheduled: changes.start ? DateFromISOtoTW(changes.start.toISOString()) : (event.start ? DateFromISOtoTW(event.start.toISOString()) : null)
+            scheduled: null
         };
 
+        // Handle scheduled date - changes.start could be a Date object or a string
+        if (changes.start) {
+            if (changes.start instanceof Date) {
+                modifiedTaskData.scheduled = DateFromISOtoTW(changes.start.toISOString());
+            } else if (typeof changes.start === 'string') {
+                // If it's a string, try to convert it directly
+                modifiedTaskData.scheduled = DateFromISOtoTW(changes.start);
+            } else {
+                // Fallback to event.start if available
+                if (event.start instanceof Date) {
+                    modifiedTaskData.scheduled = DateFromISOtoTW(event.start.toISOString());
+                } else if (typeof event.start === 'string') {
+                    modifiedTaskData.scheduled = DateFromISOtoTW(event.start);
+                }
+            }
+        } else if (event.start) {
+            // No changes.start, use event.start
+            if (event.start instanceof Date) {
+                modifiedTaskData.scheduled = DateFromISOtoTW(event.start.toISOString());
+            } else if (typeof event.start === 'string') {
+                modifiedTaskData.scheduled = DateFromISOtoTW(event.start);
+            }
+        }
+
         // Add duration if it changed
-        if (changes.end) {
+        if (changes.end || changes.start) {
+            // Create proper date objects for duration calculation
+            const startDate = changes.start ? 
+                (changes.start instanceof Date ? changes.start : new Date(changes.start)) : 
+                (event.start instanceof Date ? event.start : new Date(event.start));
+            
+            const endDate = changes.end ? 
+                (changes.end instanceof Date ? changes.end : new Date(changes.end)) : 
+                (event.end instanceof Date ? event.end : new Date(event.end));
+            
             const duration = calculateDurationFromEvent({
-                start: changes.start || event.start,
-                end: changes.end || event.end
+                start: startDate,
+                end: endDate
             });
             modifiedTaskData.duration = duration;
         }
