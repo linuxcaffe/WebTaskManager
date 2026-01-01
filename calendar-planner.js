@@ -243,7 +243,8 @@ function handleBeforeCreateEvent(eventObj) {
         // Create new task via API
         const newTaskData = {
             description: newEvent.title,
-            scheduled: newEvent.start ? DateFromISOtoTW(newEvent.start.toISOString()) : null
+            scheduled: newEvent.start ? (newEvent.start instanceof Date ? DateFromISOtoTW(newEvent.start.toISOString()) : DateFromISOtoTW(newEvent.start)) : null,
+            duration: "30min"
         };
 
         // Call the add task endpoint
