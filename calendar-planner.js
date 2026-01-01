@@ -219,7 +219,7 @@ function handleSelectDateTimeEvent(eventInfo) {
 /**
  * Fonction pour gérer l'événement beforeCreateEvent 
  */
-function handleBeforeCreateEvent(eventObj) {
+async function handleBeforeCreateEvent(eventObj) {
     let newEvent;
     // Use the temporarily stored event data if available
     if (tempEventData) {
@@ -247,30 +247,15 @@ function handleBeforeCreateEvent(eventObj) {
             duration: calculateDurationFromEvent(newEvent)
         };
 
-        // Call the add task endpoint
-        fetch('/api/task/add', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(newTaskData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.task && data.task.uuid) {
-                // Update the event with the real UUID
-                newEvent.id = data.task.uuid;
-            } else {
-                console.error('Failed to create task to backend:', data.error || 'Unknown error');
-                // Show error to user
-                showError('Failed to create task to backend: ' + (data.error || 'Unknown error'));
-            }
-        })
-        .catch(error => {
-            console.error('Network error creating task:', error);
+        const result = await addTaskToBackend(newTaskData);
+        if (result.success && result.task && result.task.uuid) {
+            // Update the event with the real UUID
+            newEvent.id = result.task.uuid;
+        } else {
+            console.error('Failed to create task to backend:', result.error || 'Unknown error');
             // Show error to user
-            showError('Network error creating task: ' + error.message);
-        });
+            showError('Failed to create task to backend: ' + (result.error || 'Unknown error'));
+        }
     }
     // Sync to backend if this is a TaskWarrior task (not a toast_ prefixed ID)
     else if (newEvent.id && !newEvent.id.startsWith('toast_')) {
@@ -280,25 +265,10 @@ function handleBeforeCreateEvent(eventObj) {
             scheduled: newEvent.start ? DateFromISOtoTW(newEvent.start.toISOString()) : null
         };
 
-        // Make the fetch call to backend using the same pattern as saveTaskEdit
-        fetch(`/api/task/${newEvent.id}/modify`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(modifiedTaskData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (!data.success) {
-                console.error('Failed to sync task to backend:', data.error);
-                // Could add user notification here if needed
-            }
-        })
-        .catch(error => {
-            console.error('Network error syncing task:', error);
-            // Could add user notification here if needed
-        });
+        const result = await modifyTaskInBackend(newEvent.id, modifiedTaskData);
+        if (!result.success) {
+            console.error('Failed to sync task to backend:', result.error);
+        }
     }
 
     calendar.createEvents([newEvent]);
@@ -724,6 +694,72 @@ function parseEstTime(estTime) {
     return minutes;
 }
 
+async function addTaskToBackend(taskData) {
+    /**
+     * Add a new task to the backend
+     * @param {Object} taskData - Task data to add
+     * @returns {Promise<Object>} - Promise that resolves to {success: boolean, task: Object, error: string}
+     */
+    try {
+        const response = await fetch('/api/task/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(taskData)
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.task) {
+            return {
+                success: true,
+                task: data.task,
+                error: null
+            };
+        } else {
+            return {
+                success: false,
+                task: null,
+                error: data.error || 'Unknown error creating task'
+            };
+        }
+    } catch (error) {
+        console.error('Network error creating task:', error);
+        return {
+            success: false,
+            task: null,
+            error: error.message || 'Network error'
+        };
+    }
+}
+
+
+async function modifyTaskInBackend(taskId, taskData) {
+    try {
+        const response = await fetch(`/api/task/${taskId}/modify`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(taskData)
+        });
+        const data = await response.json();
+
+        return {
+            success: data.success,
+            error: data.error || 'Unknown error creating task'
+        };
+       
+    } catch (error) {
+        console.error('Network error modifying task:', error);
+        return {
+            success: false,
+            error: error.message || 'Network error'
+        };
+
+    }
+}
 function calculateDurationFromEvent(event) {
     // Calculate duration between event.start and event.end
     // Returns ISO 8601 duration format (PT2H30M)
