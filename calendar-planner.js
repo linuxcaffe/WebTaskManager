@@ -260,13 +260,10 @@ function handleBeforeCreateEvent(eventObj) {
             if (data.success && data.task && data.task.uuid) {
                 // Update the event with the real UUID
                 newEvent.id = data.task.uuid;
-                // Re-create the event with the new ID
-                calendar.createEvents([newEvent]);
-                console.log('Task created successfully with UUID:', newEvent.id);
             } else {
-                console.error('Failed to create task:', data.error || 'Unknown error');
+                console.error('Failed to create task to backend:', data.error || 'Unknown error');
                 // Show error to user
-                showError('Failed to create task: ' + (data.error || 'Unknown error'));
+                showError('Failed to create task to backend: ' + (data.error || 'Unknown error'));
             }
         })
         .catch(error => {
@@ -305,7 +302,7 @@ function handleBeforeCreateEvent(eventObj) {
     }
 
     calendar.createEvents([newEvent]);
-    console.log('Event created with modified data:', newEvent);
+    console.log('Event created :', newEvent);
 }
 
 /**
