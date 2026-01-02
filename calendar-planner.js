@@ -240,7 +240,7 @@ async function handleBeforeCreateEvent(eventObj) {
         const newTaskData = {
             description: newEvent.title,
             scheduled: newEvent.start ? (newEvent.start instanceof Date ? DateFromISOtoTW(newEvent.start.toISOString()) : DateFromISOtoTW(newEvent.start)) : null,
-            duration: calculateDurationFromEvent(newEvent)
+            estTime: calculateDurationFromEvent(newEvent)
         };
 
         const result = await addTaskToBackend(newTaskData);
@@ -312,11 +312,11 @@ async function handleBeforeUpdateEvent({ event, changes }) {
                 start: finalStartDate,
                 end: finalEndDate
             });
-            modifiedTaskData.duration = duration;
+            modifiedTaskData.estTime = duration;
             console.log("Calculated duration:", duration);
         } else if (finalStartDate) {
             // If we have a start date but no end date, use default duration
-            modifiedTaskData.duration = 'PT30M';
+            modifiedTaskData.estTime = 'PT30M';
             console.log("Using default duration PT30M (no end date available)");
         }
 

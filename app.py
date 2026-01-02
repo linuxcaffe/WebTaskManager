@@ -225,8 +225,8 @@ def modify_task(task_id):
         else:
             modifications.append('project:')
             
-    if 'est' in data and data['est']:
-        modifications.append(f'estTime:{data["est"]}')
+    if 'estTime' in data and data['estTime']:
+        modifications.append(f'estTime:{data["estTime"]}')
     
     if modifications:
         mod_string = ' '.join(modifications)
