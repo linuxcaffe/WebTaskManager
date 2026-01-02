@@ -271,8 +271,8 @@ def add_task():
     if data.get('project'):
         command_parts.append(f'project:{data["project"]}')
     
-    if data.get('duration'):
-        command_parts.append(f'estTime:{data["duration"]}')
+    if data.get('estTime'):
+        command_parts.append(f'estTime:{data["estTime"]}')
     
     # Créer la tâche sans export pour éviter que export soit inclus dans la description
     command = f'task {" ".join(command_parts)}'
