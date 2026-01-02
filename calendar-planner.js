@@ -165,9 +165,7 @@ function setupEventListeners() {
     calendar.on('beforeUpdateEvent', handleBeforeUpdateEvent);
 
     // Écouter la suppression
-    calendar.on('beforeDeleteEvent', (event) => {
-      calendar.deleteEvent(event.id, event.calendarId);
-    });
+    calendar.on('beforeDeleteEvent', handleBeforeDeleteEvent);
 
 }
 
@@ -342,6 +340,56 @@ async function handleBeforeUpdateEvent({ event, changes }) {
     calendar.updateEvent(event.id, event.calendarId, changes);
     return true;
 
+}
+
+/**
+ * Fonction pour gérer l'événement beforeDeleteEvent
+ * Supprime la date planifiée d'une tâche au lieu de la supprimer complètement
+ */
+async function handleBeforeDeleteEvent(event) {
+    // Only handle TaskWarrior tasks (not toast_ prefixed IDs)
+    if (event.id && !event.id.startsWith('toast_')) {
+        console.log('Handling delete event for task:', event.id);
+        
+        try {
+            // Prepare task data to remove the scheduled date
+            // Setting scheduled to null or empty string will unschedule the task
+            const modifiedTaskData = {
+                scheduled: null  // This removes the scheduled date from the task
+            };
+
+            console.log('Attempting to unschedule task by removing scheduled date:', modifiedTaskData);
+            
+            // Call the backend to modify the task (remove scheduled date)
+            const result = await modifyTaskInBackend(event.id, modifiedTaskData);
+            
+            if (result.success) {
+                console.log('Task unscheduled successfully:', event.id);
+                showSuccess('Task has been unscheduled and moved back to the unplanned tasks list.');
+                
+                // Remove from calendar frontend
+                calendar.deleteEvent(event.id, event.calendarId);
+                
+                // Refresh the unplanned tasks list to show the newly unscheduled task
+                loadTasks();
+                
+                return true;
+            } else {
+                console.error('Failed to unschedule task:', result.error);
+                showError('Failed to unschedule task: ' + (result.error || 'Unknown error'));
+                return false; // Prevent deletion if backend sync fails
+            }
+        } catch (error) {
+            console.error('Error unscheduling task:', error);
+            showError('Error unscheduling task: ' + error.message);
+            return false;
+        }
+    } else {
+        // For toast_ prefixed events (new events not yet saved), just delete from calendar
+        console.log('Deleting temporary event (toast_ prefixed):', event.id);
+        calendar.deleteEvent(event.id, event.calendarId);
+        return true;
+    }
 }
 
 /**
