@@ -285,49 +285,45 @@ async function handleBeforeUpdateEvent({ event, changes }) {
             scheduled: null
         };
 
-        // Handle scheduled date - changes.start could be a Date object or a string
-        if (changes.start) {
-            if (changes.start instanceof Date) {
-                modifiedTaskData.scheduled = DateFromISOtoTW(changes.start.toISOString());
-            } else if (typeof changes.start === 'string') {
-                // If it's a string, try to convert it directly
-                modifiedTaskData.scheduled = DateFromISOtoTW(changes.start);
-            } else {
-                // Fallback to event.start if available
-                if (event.start instanceof Date) {
-                    modifiedTaskData.scheduled = DateFromISOtoTW(event.start.toISOString());
-                } else if (typeof event.start === 'string') {
-                    modifiedTaskData.scheduled = DateFromISOtoTW(event.start);
-                }
-            }
-        } else if (event.start) {
-            // No changes.start, use event.start
-            if (event.start instanceof Date) {
-                modifiedTaskData.scheduled = DateFromISOtoTW(event.start.toISOString());
-            } else if (typeof event.start === 'string') {
-                modifiedTaskData.scheduled = DateFromISOtoTW(event.start);
-            }
+        // Handle scheduled date using the new helper function
+        console.log("Processing date changes - changes.start:", changes.start);
+        console.log("Processing date changes - event.start:", event.start);
+        
+        // Extract dates using the helper function
+        const extractedStartDate = extractDateFromToastChange(changes.start);
+        const extractedEndDate = extractDateFromToastChange(changes.end);
+        
+        // Use extracted start date or fall back to event start date
+        const finalStartDate = extractedStartDate || extractDateFromToastChange(event.start);
+        const finalEndDate = extractedEndDate || extractDateFromToastChange(event.end);
+        
+        console.log("Extracted start date:", finalStartDate);
+        console.log("Extracted end date:", finalEndDate);
+        
+        // Set scheduled date if we have a valid start date
+        if (finalStartDate) {
+            modifiedTaskData.scheduled = DateFromISOtoTW(finalStartDate.toISOString());
+            console.log("Final scheduled date for backend:", modifiedTaskData.scheduled);
+        } else {
+            console.warn("No valid start date found - scheduled will remain null");
         }
-
-        // Add duration if it changed
-        if (changes.end || changes.start) {
-            // Create proper date objects for duration calculation
-            const startDate = changes.start ? 
-                (changes.start instanceof Date ? changes.start : new Date(changes.start)) : 
-                (event.start instanceof Date ? event.start : new Date(event.start));
-            
-            const endDate = changes.end ? 
-                (changes.end instanceof Date ? changes.end : new Date(changes.end)) : 
-                (event.end instanceof Date ? event.end : new Date(event.end));
-            
+        
+        // Add duration if we have valid dates
+        if (finalStartDate && finalEndDate) {
             const duration = calculateDurationFromEvent({
-                start: startDate,
-                end: endDate
+                start: finalStartDate,
+                end: finalEndDate
             });
             modifiedTaskData.duration = duration;
+            console.log("Calculated duration:", duration);
+        } else if (finalStartDate) {
+            // If we have a start date but no end date, use default duration
+            modifiedTaskData.duration = 'PT30M';
+            console.log("Using default duration PT30M (no end date available)");
         }
 
         try {
+            console.log("Status : modifiedTaskData : ", modifiedTaskData);
             const result = await modifyTaskInBackend(event.id, modifiedTaskData);
             if (!result.success) {
                 console.error('Failed to sync task update to backend:', result.error);
@@ -343,7 +339,9 @@ async function handleBeforeUpdateEvent({ event, changes }) {
     }
 
     // Allow the update to proceed
+    calendar.updateEvent(event.id, event.calendarId, changes);
     return true;
+
 }
 
 /**
@@ -763,6 +761,61 @@ function parseEstTime(estTime) {
     });
 
     return minutes;
+}
+
+/**
+ * Extracts a Date object from Toast UI Calendar change objects
+ * Handles the nested structure: { tzOffset: null, d: { d: Date(...) } }
+ * @param {Object} changeObj - The change object from Toast UI Calendar
+ * @returns {Date|null} - The extracted Date object or null if not found
+ */
+function extractDateFromToastChange(changeObj) {
+    if (!changeObj) {
+        console.log('extractDateFromToastChange: null/undefined input');
+        return null;
+    }
+
+    // Log the original structure for debugging
+    console.log('Extracting date from object:', changeObj);
+
+    // Case 1: Already a Date object
+    if (changeObj instanceof Date) {
+        console.log('Direct Date object found');
+        return changeObj;
+    }
+
+    // Case 2: Toast UI nested structure { tzOffset: null, d: { d: Date(...) } }
+    if (changeObj.d && changeObj.d.d && changeObj.d.d instanceof Date) {
+        console.log('Toast UI nested Date structure found:', changeObj.d.d);
+        return changeObj.d.d;
+    }
+
+    // Case 3: Simpler nested structure { d: Date(...) }
+    if (changeObj.d && changeObj.d instanceof Date) {
+        console.log('Simple nested Date structure found:', changeObj.d);
+        return changeObj.d;
+    }
+
+    // Case 4: String format
+    if (typeof changeObj === 'string') {
+        console.log('String date found, creating Date object:', changeObj);
+        const date = new Date(changeObj);
+        return isNaN(date.getTime()) ? null : date;
+    }
+
+    // Case 5: Try to create Date from object (fallback)
+    try {
+        const date = new Date(changeObj);
+        if (!isNaN(date.getTime())) {
+            console.log('Created Date from object:', date);
+            return date;
+        }
+    } catch (e) {
+        console.error('Failed to create Date from object:', e);
+    }
+
+    console.warn('Could not extract valid Date from object:', changeObj);
+    return null;
 }
 
 async function addTaskToBackend(taskData) {
