@@ -191,18 +191,19 @@ class TaskWarriorUI {
             if (data.success) {
                 // Mettre à jour la tâche dans le tableau local ou la supprimer si nécessaire
                 if (action === 'delete') {
-                    this.tasks = this.tasks.filter(task => task.uuid !== taskId);
+                    this.removeTaskCard(taskId);
+                    this.tasks = this.tasks.filter(task => task.id !== taskId);
                 } else if (data.task) {
                     // Si le serveur renvoie la tâche mise à jour, on l'utilise
                     const taskIndex = this.tasks.findIndex(t => t.uuid === taskId);
                     if (taskIndex !== -1) {
                         this.tasks[taskIndex] = data.task;
                     }
+                    this.renderTasks();
                 } else {
                     // Sinon, on recharge les tâches depuis le serveur
                     return this.loadTasks();
                 }
-                this.renderTasks();
                 this.showNotification(`Task ${action} successful`, 'success');
             } else {
                 this.showNotification(data.message || `Failed to ${action} task`, 'error');
@@ -465,7 +466,7 @@ class TaskWarriorUI {
         const estTime = task.estTime ? this.formatDuration(task.estTime) : '';
 
         return `
-            <div class="task-card ${priorityClass}">
+            <div class="task-card ${priorityClass}" data-task-id="${task.id}">
                 <div class="task-header">
                     <div class="task-info">
                         <div class="task-description">${this.escapeHtml(task.description)}</div>
@@ -510,6 +511,22 @@ class TaskWarriorUI {
     confirmDelete(taskId) {
         if (confirm('Are you sure you want to delete this task?')) {
             this.performTaskAction(taskId, 'delete');
+        }
+    }
+
+    /**
+     * Supprime une taskCard spécifique du DOM sans recharger toutes les tâches
+     */
+    removeTaskCard(taskId) {
+        const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        if (taskCard) {
+            taskCard.remove();
+
+            // Mettre à jour le message "aucune tâche" si nécessaire
+            const container = document.getElementById('tasks-container');
+            if (container && container.querySelectorAll('.task-card').length === 0) {
+                container.innerHTML = '<div class="no-tasks">No tasks found</div>';
+            }
         }
     }
 
