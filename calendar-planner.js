@@ -269,6 +269,20 @@ async function handleBeforeCreateEvent(eventObj) {
 
     calendar.createEvents([newEvent]);
     console.log('Event created :', newEvent);
+
+    // NOUVEAU CODE : Suppression de la taskCard et réinitialisation
+    if (selectedTaskCard && selectedTaskData) {
+        // Supprimer la taskCard du DOM
+        selectedTaskCard.remove();
+
+        // Réinitialiser les variables
+        selectedTaskCard = null;
+        selectedTaskData = null;
+        tempEventData = null;
+
+        // Mettre à jour le compteur de tâches
+        updateTaskCount();
+    }
 }
 
 /**
@@ -639,6 +653,29 @@ function displayUnplannedTasks(tasks) {
         const taskCard = createTaskCard(task);
         container.appendChild(taskCard);
     });
+}
+
+/**
+ * Met à jour le compteur de tâches sans recharger depuis le serveur
+ */
+function updateTaskCount() {
+    const container = document.getElementById('unplanned-tasks');
+    const countEl = document.getElementById('task-count');
+
+    // Compter les taskCards restantes
+    const remainingCards = container.querySelectorAll('.task-card').length;
+
+    countEl.textContent = `${remainingCards} tâche${remainingCards > 1 ? 's' : ''}`;
+
+    // Si plus aucune tâche, afficher le message "Aucune tâche à planifier"
+    if (remainingCards === 0) {
+        container.innerHTML = `
+            <div class="empty-message">
+                <span class="icon">✅</span>
+                <p>Aucune tâche à planifier</p>
+            </div>
+        `;
+    }
 }
 
 
