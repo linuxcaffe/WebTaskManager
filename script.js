@@ -31,11 +31,12 @@ class TaskWarriorUI {
             onSubmit: (taskData) => this.handleTaskCreate(taskData)
         });
         
-        this.initializeEventListeners();
-        this.loadTasks();
-        
-        // Mettre à jour les suggestions de projets
-        this.updateProjectSuggestions();
+        // Attendre que les composants soient initialisés avant de charger les tâches
+        setTimeout(() => {
+            this.initializeEventListeners();
+            this.loadTasks();
+            this.updateProjectSuggestions();
+        }, 100);
     }
 
     initializeEventListeners() {
@@ -173,7 +174,7 @@ class TaskWarriorUI {
         }
     }
 
-    async performTaskAction(taskId, action) {
+    async performTaskAction(taskUuid, action) {
         const actionMap = {
             'start': 'POST',
             'stop': 'POST',
@@ -182,7 +183,7 @@ class TaskWarriorUI {
         };
 
         const method = actionMap[action];
-        const endpoint = action === 'delete' ? `/api/task/${taskId}/delete` : `/api/task/${taskId}/${action}`;
+        const endpoint = action === 'delete' ? `/api/task/${taskUuid}/delete` : `/api/task/${taskUuid}/${action}`;
 
         try {
             const response = await fetch(endpoint, { method });
@@ -191,11 +192,11 @@ class TaskWarriorUI {
             if (data.success) {
                 // Mettre à jour la tâche dans le tableau local ou la supprimer si nécessaire
                 if (action === 'delete') {
-                    this.removeTaskCard(taskId);
-                    this.tasks = this.tasks.filter(task => task.id !== taskId);
+                    this.removeTaskCard(taskUuid);
+                    this.tasks = this.tasks.filter(task => task.uuid !== taskUuid);
                 } else if (data.task) {
                     // Si le serveur renvoie la tâche mise à jour, on l'utilise
-                    const taskIndex = this.tasks.findIndex(t => t.uuid === taskId);
+                    const taskIndex = this.tasks.findIndex(t => t.uuid === taskUuid);
                     if (taskIndex !== -1) {
                         this.tasks[taskIndex] = data.task;
                     }
@@ -260,7 +261,7 @@ class TaskWarriorUI {
         };
 
         try {
-            const response = await fetch(`/api/task/${taskData.id}/modify`, {
+            const response = await fetch(`/api/task/${taskData.uuid}/modify`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -283,6 +284,9 @@ class TaskWarriorUI {
             }
         } catch (error) {
             this.showNotification('Network error: ' + error.message, 'error');
+        }
+        finally {
+            this.taskEditor.hide();
         }
     }
     
@@ -466,7 +470,7 @@ class TaskWarriorUI {
         const estTime = task.estTime ? this.formatDuration(task.estTime) : '';
 
         return `
-            <div class="task-card ${priorityClass}" data-task-id="${task.id}">
+            <div class="task-card ${priorityClass}" data-task-id="${task.uuid}">
                 <div class="task-header">
                     <div class="task-info">
                         <div class="task-description">${this.escapeHtml(task.description)}</div>
@@ -487,20 +491,20 @@ class TaskWarriorUI {
                 </div>
                 <div class="task-actions">
                     ${task.start ? 
-                        `<button class="btn btn-warning btn-small" onclick="app.performTaskAction(${task.id}, 'stop')">
+                        `<button class="btn btn-warning btn-small" onclick="app.performTaskAction('${task.uuid}', 'stop')">
                             <span class="icon">⏸️</span> Stop
                         </button>` :
-                        `<button class="btn btn-success btn-small" onclick="app.performTaskAction(${task.id}, 'start')">
+                        `<button class="btn btn-success btn-small" onclick="app.performTaskAction('${task.uuid}', 'start')">
                             <span class="icon">▶️</span> Start
                         </button>`
                     }
                     <button class="btn btn-primary btn-small" onclick="app.openEditModal(${JSON.stringify(task).replace(/"/g, '&quot;')})">
                         <span class="icon">✏️</span> Edit
                     </button>
-                    <button class="btn btn-success btn-small" onclick="app.performTaskAction(${task.id}, 'done')">
+                    <button class="btn btn-success btn-small" onclick="app.performTaskAction('${task.uuid}', 'done')">
                         <span class="icon">✅</span> Done
                     </button>
-                    <button class="btn btn-danger btn-small" onclick="app.confirmDelete(${task.id})">
+                    <button class="btn btn-danger btn-small" onclick="app.confirmDelete('${task.uuid}')">
                         <span class="icon">🗑️</span> Delete
                     </button>
                 </div>
@@ -508,17 +512,17 @@ class TaskWarriorUI {
         `;
     }
 
-    confirmDelete(taskId) {
+    confirmDelete(taskUuid) {
         if (confirm('Are you sure you want to delete this task?')) {
-            this.performTaskAction(taskId, 'delete');
+            this.performTaskAction(taskUuid, 'delete');
         }
     }
 
     /**
      * Supprime une taskCard spécifique du DOM sans recharger toutes les tâches
      */
-    removeTaskCard(taskId) {
-        const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+    removeTaskCard(taskUuid) {
+        const taskCard = document.querySelector(`.task-card[data-task-id="${taskUuid}"]`);
         if (taskCard) {
             taskCard.remove();
 
