@@ -452,65 +452,16 @@ class TaskWarriorUI {
             return;
         }
         
-        container.innerHTML = filteredTasks.map(task => this.renderTask(task)).join('');
-    }
-
-    renderTask(task) {
-        const priorityClass = task.priority ? `priority-${task.priority}` : '';
-        const statusClass = task.start ? 'status-active' : 'status-pending';
-        const statusText = task.start ? 'Active' : 'Pending';
+        // Vide le conteneur
+        container.innerHTML = '';
         
-        const tags = task.tags ? task.tags.map(tag => 
-            `<span class="tag">${this.escapeHtml(tag)}</span>`
-        ).join('') : '';
-
-        const dueDate = task.due ? this.formatDisplayDate(task.due) : '';
-        const scheduledDate = task.scheduled ? this.formatDisplayDate(task.scheduled) : '';
-        const urgency = task.urgency !== undefined ? parseFloat(task.urgency).toFixed(2) : '';
-        const estTime = task.estTime ? this.formatDuration(task.estTime) : '';
-
-        return `
-            <div class="task-card ${priorityClass}" data-task-id="${task.uuid}">
-                <div class="task-header">
-                    <div class="task-info">
-                        <div class="task-description">${this.escapeHtml(task.description)}</div>
-                        <div class="task-meta">
-                            <span class="task-id">ID: ${task.id}</span>
-                            <span class="task-status ${statusClass}">${statusText}</span>
-                            ${task.priority ? `<span>Priority: ${task.priority}</span>` : ''}
-                            ${urgency ? `<span>Urgency: ${urgency}</span>` : ''}
-                            ${task.project ? `<span>Project: ${this.escapeHtml(task.project)}</span>` : ''}
-                        </div>
-                        ${tags ? `<div class="task-tags">${tags}</div>` : ''}
-                        <div class="task-dates">
-                            ${dueDate ? `<div>Due: ${dueDate}</div>` : ''}
-                            ${scheduledDate ? `<div>Scheduled: ${scheduledDate}</div>` : ''}
-                            ${estTime ? `<div>Est. Time: ${estTime}</div>` : ''}
-                        </div>
-                    </div>
-                </div>
-                <div class="task-actions">
-                    ${task.start ? 
-                        `<button class="btn btn-warning btn-small" onclick="app.performTaskAction('${task.uuid}', 'stop')">
-                            <span class="icon">⏸️</span> Stop
-                        </button>` :
-                        `<button class="btn btn-success btn-small" onclick="app.performTaskAction('${task.uuid}', 'start')">
-                            <span class="icon">▶️</span> Start
-                        </button>`
-                    }
-                    <button class="btn btn-primary btn-small" onclick="app.openEditModal(${JSON.stringify(task).replace(/"/g, '&quot;')})">
-                        <span class="icon">✏️</span> Edit
-                    </button>
-                    <button class="btn btn-success btn-small" onclick="app.performTaskAction('${task.uuid}', 'done')">
-                        <span class="icon">✅</span> Done
-                    </button>
-                    <button class="btn btn-danger btn-small" onclick="app.confirmDelete('${task.uuid}')">
-                        <span class="icon">🗑️</span> Delete
-                    </button>
-                </div>
-            </div>
-        `;
+        // Crée et ajoute chaque carte de tâche
+        filteredTasks.forEach(task => {
+            const taskCard = taskCardManager.createTaskCard(task, 'full');
+            container.appendChild(taskCard);
+        });
     }
+
 
     confirmDelete(taskUuid) {
         if (confirm('Are you sure you want to delete this task?')) {

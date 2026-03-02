@@ -650,7 +650,7 @@ function displayUnplannedTasks(tasks) {
 
     // Crée et ajoute chaque carte de tâche
     tasks.forEach(task => {
-        const taskCard = createTaskCard(task);
+        const taskCard = taskCardManager.createTaskCard(task, 'minimal');
         container.appendChild(taskCard);
     });
 }
@@ -679,58 +679,7 @@ function updateTaskCount() {
 }
 
 
-function createTaskCard(task) {
-    const priority = task.priority || 'M';
-    const priorityClass = priority === 'H' ? 'high' : priority === 'M' ? 'medium' : 'low';
-    const priorityText = priority === 'H' ? 'Haute' : priority === 'M' ? 'Moyenne' : 'Basse';
-
-    const duration = parseEstTime(task.estTime);
-    const durationText = duration ? formatDuration(duration) : 'Non estimé';
-
-    // Gestion des dates avec vérification de validité
-    let dueDate = '';
-    if (task.due) {
-        try {
-            const date = new Date(task.due);
-            if (!isNaN(date.getTime())) {
-                dueDate = date.toLocaleDateString('fr-FR');
-            }
-        } catch (e) {
-            console.error('Format de date invalide pour la tâche:', task);
-        }
-    }
-    const tags = task.tags || [];
-    const pool = task.pool || 'pro';
-
-    // Création de l'élément DOM au lieu de retourner une chaîne HTML
-    const card = document.createElement('div');
-    card.className = 'task-card';
-    card.dataset.taskId = task.uuid;
-    card.dataset.taskData = JSON.stringify(task).replace(/'/g, "&apos;");
-    card.innerHTML = `
-        <div class="task-card-header">
-            <span class="task-priority ${priorityClass}">${priorityText}</span>
-        </div>
-        <div class="task-description">${escapeHtml(task.description)}</div>
-        <div class="task-meta">
-            <span class="task-meta-item">⏱️ ${durationText}</span>
-            ${dueDate ? `<span class="task-meta-item">📅 ${dueDate}</span>` : ''}
-            <span class="task-meta-item">📂 ${pool}</span>
-        </div>
-        ${tags.length > 0 ? `
-            <div class="task-tags">
-                ${tags.map(tag => `<span class="task-tag">#${tag}</span>`).join('')}
-            </div>
-        ` : ''}
-    `;
-
-    // Ajout de l'eventListener directement
-    card.addEventListener('click', function() {
-        handleTaskCardClick(this);
-    });
-
-    return card;
-}
+// La fonction createTaskCard est maintenant gérée par taskCardManager
 /**
  * Changement de vue du calendrier 
  */
