@@ -1,7 +1,24 @@
 /**
  * TaskActionHandler - Interface pour gérer les actions des tâches
+ * Version autonome sans dépendance à l'objet app global
  */
 class TaskActionHandler {
+    /**
+     * @param {Object} options - Options de configuration
+     * @param {Function} options.onTaskUpdate - Callback pour mise à jour des tâches
+     * @param {Function} options.onTaskDelete - Callback pour suppression de tâche
+     * @param {Function} options.onEditRequest - Callback pour demande d'édition
+     * @param {Function} options.onConfirmDelete - Callback pour confirmation de suppression
+     * @param {Function} options.showNotification - Callback pour afficher des notifications
+     */
+    constructor(options = {}) {
+        this.onTaskUpdate = options.onTaskUpdate || (() => {});
+        this.onTaskDelete = options.onTaskDelete || (() => {});
+        this.onEditRequest = options.onEditRequest || (() => {});
+        this.onConfirmDelete = options.onConfirmDelete || (() => {});
+        this.showNotification = options.showNotification || (() => {});
+    }
+
     async performTaskAction(taskUuid, action) {
         const actionMap = {
             'start': 'POST',
@@ -18,36 +35,56 @@ class TaskActionHandler {
             const data = await response.json();
 
             if (data.success) {
-                // Mettre à jour la tâche dans le tableau local ou la supprimer si nécessaire
                 if (action === 'delete') {
-                    app.removeTaskCard(taskUuid);
-                    app.tasks = app.tasks.filter(task => task.uuid !== taskUuid);
+                    this.onTaskDelete(taskUuid);
                 } else if (data.task) {
-                    // Si le serveur renvoie la tâche mise à jour, on l'utilise
-                    const taskIndex = app.tasks.findIndex(t => t.uuid === taskUuid);
-                    if (taskIndex !== -1) {
-                        app.tasks[taskIndex] = data.task;
-                    }
-                    app.renderTasks();
+                    this.onTaskUpdate(data.task);
                 } else {
-                    // Sinon, on recharge les tâches depuis le serveur
-                    return app.loadTasks();
+                    // Si pas de tâche retournée, on déclenche une recharge complète
+                    this.onTaskUpdate(null);
                 }
-                app.showNotification(`Task ${action} successful`, 'success');
+                this.showNotification(`Task ${action} successful`, 'success');
             } else {
-                app.showNotification(data.message || `Failed to ${action} task`, 'error');
+                this.showNotification(data.message || `Failed to ${action} task`, 'error');
             }
         } catch (error) {
-            app.showNotification('Network error: ' + error.message, 'error');
+            this.showNotification('Network error: ' + error.message, 'error');
         }
     }
     
     openEditModal(task) {
-        app.openEditModal(task);
+        this.onEditRequest(task);
     }
     
     confirmDelete(taskUuid) {
-        app.confirmDelete(taskUuid);
+        this.onConfirmDelete(taskUuid);
+    }
+}
+
+/**
+ * ScriptTaskActionHandler - Implémentation spécifique pour script.js
+ * Maintenue pour compatibilité ascendante
+ */
+class ScriptTaskActionHandler extends TaskActionHandler {
+    constructor() {
+        super({
+            onTaskUpdate: (task) => {
+                if (task) {
+                    const taskIndex = app.tasks.findIndex(t => t.uuid === task.uuid);
+                    if (taskIndex !== -1) {
+                        app.tasks[taskIndex] = task;
+                    }
+                }
+                app.renderTasks();
+            },
+            onTaskDelete: (taskUuid) => {
+                app.removeTaskCard(taskUuid);
+                app.tasks = app.tasks.filter(task => task.uuid !== taskUuid);
+            },
+            onEditRequest: (task) => app.openEditModal(task),
+            onConfirmDelete: (taskUuid) => app.confirmDelete(taskUuid),
+            showNotification: (message, type) => app.showNotification(message, type)
+        });
     }
 }
 
@@ -62,6 +99,14 @@ class TaskCardManager {
         this.templates = {};
         this.actionHandler = actionHandler || new TaskActionHandler();
         this.loadTemplates();
+    }
+
+    /**
+     * Définit un gestionnaire d'actions personnalisé
+     * @param {TaskActionHandler} handler - Le gestionnaire d'actions à utiliser
+     */
+    setActionHandler(handler) {
+        this.actionHandler = handler;
     }
 
     /**
@@ -137,11 +182,12 @@ class TaskCardManager {
 
         // Ajouter un gestionnaire d'événements pour la sélection
         card.addEventListener('click', function(e) {
-            // Ne pas déclencher si le clic est sur le bouton de bascule
-            if (e.target.closest('.toggle-mode-btn')) {
+            // Ne pas déclencher si le clic est sur le bouton de bascule ou sur un bouton d'action
+            if (e.target.closest('.toggle-mode-btn') || e.target.closest('.btn')) {
                 return;
             }
-            handleTaskCardClick(this);
+            // Optionnel: tu peux ajouter ici ton propre comportement de clic
+            // console.log('Task card clicked:', task.uuid);
         });
 
         return card;
@@ -327,5 +373,4 @@ class TaskCardManager {
     }
 }
 
-// Initialiser le gestionnaire de TaskCards
-const taskCardManager = new TaskCardManager();
+

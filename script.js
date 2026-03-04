@@ -570,6 +570,6 @@ class TaskWarriorUI {
 let app;
 document.addEventListener('DOMContentLoaded', () => {
     app = new TaskWarriorUI();
-    // Initialiser taskCardManager avec le gestionnaire d'actions
+    // Initialiser taskCardManager avec le gestionnaire d'actions spécifique à script.js
     taskCardManager = new TaskCardManager(new ScriptTaskActionHandler());
 });
