@@ -1,11 +1,66 @@
 /**
+ * TaskActionHandler - Interface pour gérer les actions des tâches
+ */
+class TaskActionHandler {
+    async performTaskAction(taskUuid, action) {
+        const actionMap = {
+            'start': 'POST',
+            'stop': 'POST',
+            'done': 'POST',
+            'delete': 'DELETE'
+        };
+
+        const method = actionMap[action];
+        const endpoint = action === 'delete' ? `/api/task/${taskUuid}/delete` : `/api/task/${taskUuid}/${action}`;
+
+        try {
+            const response = await fetch(endpoint, { method });
+            const data = await response.json();
+
+            if (data.success) {
+                // Mettre à jour la tâche dans le tableau local ou la supprimer si nécessaire
+                if (action === 'delete') {
+                    app.removeTaskCard(taskUuid);
+                    app.tasks = app.tasks.filter(task => task.uuid !== taskUuid);
+                } else if (data.task) {
+                    // Si le serveur renvoie la tâche mise à jour, on l'utilise
+                    const taskIndex = app.tasks.findIndex(t => t.uuid === taskUuid);
+                    if (taskIndex !== -1) {
+                        app.tasks[taskIndex] = data.task;
+                    }
+                    app.renderTasks();
+                } else {
+                    // Sinon, on recharge les tâches depuis le serveur
+                    return app.loadTasks();
+                }
+                app.showNotification(`Task ${action} successful`, 'success');
+            } else {
+                app.showNotification(data.message || `Failed to ${action} task`, 'error');
+            }
+        } catch (error) {
+            app.showNotification('Network error: ' + error.message, 'error');
+        }
+    }
+    
+    openEditModal(task) {
+        app.openEditModal(task);
+    }
+    
+    confirmDelete(taskUuid) {
+        app.confirmDelete(taskUuid);
+    }
+}
+
+
+/**
  * TaskCardManager - Gestionnaire centralisé pour la création et la gestion des TaskCards
  * Permet de basculer entre les modes minimaliste et complet
  */
 
 class TaskCardManager {
-    constructor() {
+    constructor(actionHandler = null) {
         this.templates = {};
+        this.actionHandler = actionHandler || new TaskActionHandler();
         this.loadTemplates();
     }
 
@@ -171,20 +226,20 @@ class TaskCardManager {
     createTaskActions(task) {
         return `
             ${task.start ?
-                `<button class="btn btn-warning btn-small" onclick="app.performTaskAction('${task.uuid}', 'stop')">
+                `<button class="btn btn-warning btn-small" onclick="taskCardManager.actionHandler.performTaskAction('${task.uuid}', 'stop')">
                     <span class="icon">⏸️</span> Stop
                 </button>` :
-                `<button class="btn btn-success btn-small" onclick="app.performTaskAction('${task.uuid}', 'start')">
+                `<button class="btn btn-success btn-small" onclick="taskCardManager.actionHandler.performTaskAction('${task.uuid}', 'start')">
                     <span class="icon">▶️</span> Start
                 </button>`
             }
-            <button class="btn btn-primary btn-small" onclick="app.openEditModal(${JSON.stringify(task).replace(/\"/g, '&quot;')})">
+            <button class="btn btn-primary btn-small" onclick="taskCardManager.actionHandler.openEditModal(${JSON.stringify(task).replace(/\"/g, '&quot;')})">
                 <span class="icon">✏️</span> Edit
             </button>
-            <button class="btn btn-success btn-small" onclick="app.performTaskAction('${task.uuid}', 'done')">
+            <button class="btn btn-success btn-small" onclick="taskCardManager.actionHandler.performTaskAction('${task.uuid}', 'done')">
                 <span class="icon">✅</span> Done
             </button>
-            <button class="btn btn-danger btn-small" onclick="app.confirmDelete('${task.uuid}')">
+            <button class="btn btn-danger btn-small" onclick="taskCardManager.actionHandler.confirmDelete('${task.uuid}')">
                 <span class="icon">🗑️</span> Delete
             </button>
         `;

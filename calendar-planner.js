@@ -21,6 +21,8 @@ let tempEventData = null;
  * Initialisation
  */
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialiser taskCardManager avec le gestionnaire d'actions pour calendar-planner
+    taskCardManager = new TaskCardManager(new CalendarTaskActionHandler());
     initializeCalendar();
     setupEventListeners();
     loadTasks();
@@ -557,6 +559,23 @@ function createCalendarEvent(task, scheduledDate) {
         isReadOnly: false,
         raw: task
     };
+}
+
+/**
+ * TaskActionHandler pour calendar-planner.js
+ */
+class CalendarTaskActionHandler extends TaskActionHandler {
+    performTaskAction(taskUuid, action) {
+        console.log('Action performed:', action, 'on task:', taskUuid);
+    }
+    
+    openEditModal(task) {
+        console.log('Edit modal opened for task:', task);
+    }
+    
+    confirmDelete(taskUuid) {
+        console.log('Delete confirmed for task:', taskUuid);
+    }
 }
 
 /**

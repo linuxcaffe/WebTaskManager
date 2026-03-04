@@ -174,45 +174,7 @@ class TaskWarriorUI {
         }
     }
 
-    async performTaskAction(taskUuid, action) {
-        const actionMap = {
-            'start': 'POST',
-            'stop': 'POST',
-            'done': 'POST',
-            'delete': 'DELETE'
-        };
 
-        const method = actionMap[action];
-        const endpoint = action === 'delete' ? `/api/task/${taskUuid}/delete` : `/api/task/${taskUuid}/${action}`;
-
-        try {
-            const response = await fetch(endpoint, { method });
-            const data = await response.json();
-
-            if (data.success) {
-                // Mettre à jour la tâche dans le tableau local ou la supprimer si nécessaire
-                if (action === 'delete') {
-                    this.removeTaskCard(taskUuid);
-                    this.tasks = this.tasks.filter(task => task.uuid !== taskUuid);
-                } else if (data.task) {
-                    // Si le serveur renvoie la tâche mise à jour, on l'utilise
-                    const taskIndex = this.tasks.findIndex(t => t.uuid === taskUuid);
-                    if (taskIndex !== -1) {
-                        this.tasks[taskIndex] = data.task;
-                    }
-                    this.renderTasks();
-                } else {
-                    // Sinon, on recharge les tâches depuis le serveur
-                    return this.loadTasks();
-                }
-                this.showNotification(`Task ${action} successful`, 'success');
-            } else {
-                this.showNotification(data.message || `Failed to ${action} task`, 'error');
-            }
-        } catch (error) {
-            this.showNotification('Network error: ' + error.message, 'error');
-        }
-    }
 
     openEditModal(task) {
         // Utiliser le nouveau composant TaskEditor
@@ -603,8 +565,11 @@ class TaskWarriorUI {
     }
 }
 
+
 // Initialize the app when the page loads
 let app;
 document.addEventListener('DOMContentLoaded', () => {
     app = new TaskWarriorUI();
+    // Initialiser taskCardManager avec le gestionnaire d'actions
+    taskCardManager = new TaskCardManager(new ScriptTaskActionHandler());
 });
