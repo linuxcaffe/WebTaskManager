@@ -94,7 +94,7 @@ TaskWarrior-WebUI/
 ├── app.py              # Flask backend server
 ├── index.html          # Main HTML interface
 ├── styles.css          # Responsive CSS styles
-├── script.js           # Frontend JavaScript
+├── main.js             # Frontend JavaScript
 ├── requirements.txt    # Python dependencies
 └── README.md          # This file
 ```
@@ -104,7 +104,7 @@ TaskWarrior-WebUI/
 The interface can be customized by modifying:
 
 - **styles.css**: Change colors, layout, and responsive behavior
-- **script.js**: Modify frontend functionality and interactions
+- **main.js**: Modify frontend functionality and interactions
 - **app.py**: Extend backend API or add new TaskWarrior integrations
 
 ## Troubleshooting

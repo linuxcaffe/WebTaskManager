@@ -16,7 +16,7 @@ WebTaskManager
 │   ├── index.html (Page principale)
 │   ├── day-planner.html (Planificateur quotidien)
 │   ├── calendar-planner.html (Planificateur de calendrier)
-│   ├── script.js (Logique principale)
+│   ├── main.js (Logique principale)
 │   ├── day-planner.js (Logique du planificateur quotidien)
 │   └── calendar-planner.js (Logique du planificateur de calendrier)
 ├── Tests
@@ -57,7 +57,7 @@ WebTaskManager
 Les fichiers suivants nécessitent une attention particulière:
 - `app.py`: Point d'entrée du backend Flask.
 - `models.py`: Modèles de données.
-- `script.js`: Logique principale du frontend.
+- `main.js`: Logique principale du frontend.
 - `tests/task-manager.spec.js`: Tests end-to-end.
 
 ## Workflows & scripts
@@ -126,7 +126,7 @@ npm test
 ### Classes/services clés
 - `app.py`: Contient l'API Flask.
 - `models.py`: Contient les modèles de données.
-- `script.js`: Contient la logique principale du frontend.
+- `main.js`: Contient la logique principale du frontend.
 
 ### Chemins de configuration
 - `config.py`: Configuration du backend.

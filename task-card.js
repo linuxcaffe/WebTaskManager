@@ -62,7 +62,7 @@ class TaskActionHandler {
 }
 
 /**
- * ScriptTaskActionHandler - Implémentation spécifique pour script.js
+ * ScriptTaskActionHandler - Implémentation spécifique pour main.js
  * Maintenue pour compatibilité ascendante
  */
 class ScriptTaskActionHandler extends TaskActionHandler {

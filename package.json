@@ -2,7 +2,7 @@
   "name": "webtaskmanager",
   "version": "1.0.0",
   "description": "A responsive web interface for TaskWarrior that runs locally on both desktop (Ubuntu) and mobile (Android with Termux).",
-  "main": "script.js",
+  "main": "main.js",
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",
