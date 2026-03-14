@@ -97,6 +97,7 @@ class TaskCardManager {
     constructor(actionHandler = null) {
         this.templates = {};
         this.actionHandler = actionHandler || new TaskActionHandler();
+        this.eventListenerAdded = false;
         this.loadTemplates();
     }
 
@@ -256,46 +257,58 @@ class TaskCardManager {
             }
 
             // Actions
-            const actionsSlot = card.querySelector('[name="actions"]');
-            if (actionsSlot) {
-                actionsSlot.innerHTML = this.createTaskActions(task);
+            const actionsContainer = card.querySelector('.task-actions');
+            if (actionsContainer) {
+                // Ajouter l'UUID de la tâche aux boutons d'action
+                const taskUuid = task.uuid;
+                actionsContainer.querySelectorAll('[data-task-action]').forEach(button => {
+                    button.dataset.taskUuid = taskUuid;
+                });
+                
+                // Gérer l'affichage des boutons Start/Stop en fonction de l'état de la tâche
+                const startButton = actionsContainer.querySelector('.task-start');
+                const stopButton = actionsContainer.querySelector('.task-stop');
+                
+                if (task.start) {
+                    startButton.style.display = 'none';
+                    stopButton.style.display = 'inline-block';
+                } else {
+                    startButton.style.display = 'inline-block';
+                    stopButton.style.display = 'none';
+                }
             }
         }
+
+        // Ajouter un écouteur d'événements global pour la délégation d'événements
+        if (!this.eventListenerAdded) {
+            document.addEventListener('click', (e) => {
+                const button = e.target.closest('[data-task-action]');
+                if (button) {
+                    const taskUuid = button.dataset.taskUuid;
+                    const action = button.dataset.taskAction;
+                    
+                    if (taskUuid && action) {
+                        if (action === 'delete') {
+                            this.actionHandler.confirmDelete(taskUuid);
+                        } else if (action === 'edit') {
+                            // Pour l'édition, il faut récupérer les données de la tâche
+                            const card = button.closest('.task-card');
+                            if (card) {
+                                const taskData = JSON.parse(card.dataset.taskData);
+                                this.actionHandler.openEditModal(taskData);
+                            }
+                        } else {
+                            this.actionHandler.performTaskAction(taskUuid, action);
+                        }
+                    }
+                }
+            });
+            this.eventListenerAdded = true;
+        }
+
     }
 
-    /**
-     * Crée les boutons d'action pour une tâche
-     * @param {Object} task - Les données de la tâche
-     * @returns {string} - Le HTML des boutons d'action
-     */
-    createTaskActions(task) {
-        return `
-            ${task.start ?
-                `<button class="btn btn-warning btn-small" onclick="taskCardManager.actionHandler.performTaskAction('${task.uuid}', 'stop')">
-                    <span class="icon">⏸️</span> Stop
-                </button>` :
-                `<button class="btn btn-success btn-small" onclick="taskCardManager.actionHandler.performTaskAction('${task.uuid}', 'start')">
-                    <span class="icon">▶️</span> Start
-                </button>`
-            }
-            <button class="btn btn-primary btn-small" onclick="taskCardManager.actionHandler.openEditModal(${JSON.stringify(task).replace(/\"/g, '&quot;')})">
-                <span class="icon">✏️</span> Edit
-            </button>
-            <button class="btn btn-success btn-small" onclick="taskCardManager.actionHandler.performTaskAction('${task.uuid}', 'done')">
-                <span class="icon">✅</span> Done
-            </button>
-            <button class="btn btn-danger btn-small" onclick="taskCardManager.actionHandler.confirmDelete('${task.uuid}')">
-                <span class="icon">🗑️</span> Delete
-            </button>
-        `;
-        /** 
-         * Ceci est pour pallier au bug d'affichage de vim... Très bizarre.
-         * return `}`;
-        */
-    }
-
-    /**
-     * Formate la durée en minutes pour l'affichage
+    /** Formate la durée en minutes pour l'affichage
      * @param {number} minutes - La durée en minutes
      * @returns {string} - La durée formatée
      */

@@ -39,7 +39,21 @@
                 <slot name="tags"></slot>
             </div>
             <div class="task-actions">
-                <slot name="actions"></slot>
+                <button class="btn btn-warning btn-small task-stop" style="display: none;" data-task-action="stop">
+                    <span class="icon">⏸️</span> Stop
+                </button>
+                <button class="btn btn-success btn-small task-start" data-task-action="start">
+                    <span class="icon">▶️</span> Start
+                </button>
+                <button class="btn btn-primary btn-small task-edit" data-task-action="edit">
+                    <span class="icon">✏️</span> Edit
+                </button>
+                <button class="btn btn-success btn-small task-done" data-task-action="done">
+                    <span class="icon">✅</span> Done
+                </button>
+                <button class="btn btn-danger btn-small task-delete" data-task-action="delete">
+                    <span class="icon">🗑️</span> Delete
+                </button>
             </div>
         </div>
     </template>
