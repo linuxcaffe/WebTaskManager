@@ -425,12 +425,6 @@ class TaskWarriorUI {
     }
 
 
-    confirmDelete(taskUuid) {
-        if (confirm('Are you sure you want to delete this task?')) {
-            this.performTaskAction(taskUuid, 'delete');
-        }
-    }
-
     /**
      * Supprime une taskCard spécifique du DOM sans recharger toutes les tâches
      */

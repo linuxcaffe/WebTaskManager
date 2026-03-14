@@ -8,14 +8,12 @@ class TaskActionHandler {
      * @param {Function} options.onTaskUpdate - Callback pour mise à jour des tâches
      * @param {Function} options.onTaskDelete - Callback pour suppression de tâche
      * @param {Function} options.onEditRequest - Callback pour demande d'édition
-     * @param {Function} options.onConfirmDelete - Callback pour confirmation de suppression
      * @param {Function} options.showNotification - Callback pour afficher des notifications
      */
     constructor(options = {}) {
         this.onTaskUpdate = options.onTaskUpdate || (() => {});
         this.onTaskDelete = options.onTaskDelete || (() => {});
         this.onEditRequest = options.onEditRequest || (() => {});
-        this.onConfirmDelete = options.onConfirmDelete || (() => {});
         this.showNotification = options.showNotification || (() => {});
     }
 
@@ -57,7 +55,9 @@ class TaskActionHandler {
     }
     
     confirmDelete(taskUuid) {
-        this.onConfirmDelete(taskUuid);
+        if (confirm('Are you sure you want to delete this task?')) {
+            this.performTaskAction(taskUuid, 'delete');
+        }
     }
 }
 
@@ -82,7 +82,6 @@ class ScriptTaskActionHandler extends TaskActionHandler {
                 app.tasks = app.tasks.filter(task => task.uuid !== taskUuid);
             },
             onEditRequest: (task) => app.openEditModal(task),
-            onConfirmDelete: (taskUuid) => app.confirmDelete(taskUuid),
             showNotification: (message, type) => app.showNotification(message, type)
         });
     }
@@ -289,6 +288,28 @@ class TaskCardManager {
                 <span class="icon">🗑️</span> Delete
             </button>
         `;
+        /** 
+         * Ceci est pour pallier au bug d'affichage de vim... Très bizarre.
+         * return `}`;
+        */
+    }
+
+    /**
+     * Formate la durée en minutes pour l'affichage
+     * @param {number} minutes - La durée en minutes
+     * @returns {string} - La durée formatée
+     */
+    formatDuration(minutes) {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        
+        if (hours > 0 && mins > 0) {
+            return `${hours}h${mins}min`;
+        } else if (hours > 0) {
+            return `${hours}h`;
+        } else {
+            return `${mins}min`;
+        }
     }
 
     /**
@@ -343,23 +364,6 @@ class TaskCardManager {
         return minutes;
     }
 
-    /**
-     * Formate la durée en minutes pour l'affichage
-     * @param {number} minutes - La durée en minutes
-     * @returns {string} - La durée formatée
-     */
-    formatDuration(minutes) {
-        const hours = Math.floor(minutes / 60);
-        const mins = minutes % 60;
-        
-        if (hours > 0 && mins > 0) {
-            return `${hours}h${mins}min`;
-        } else if (hours > 0) {
-            return `${hours}h`;
-        } else {
-            return `${mins}min`;
-        }
-    }
 
     /**
      * Échappe les caractères HTML pour éviter les attaques XSS
