@@ -223,6 +223,10 @@ class TaskEditor {
             this.modal.querySelector('#task-editor-description').focus();
         }, 100);
     }
+
+    showForTask(task) {
+        this.show(task);
+    }
     
     hide() {
         this.modal.style.display = 'none';

@@ -176,20 +176,7 @@ class TaskWarriorUI {
 
 
 
-    openEditModal(task) {
-        // Utiliser le nouveau composant TaskEditor
-        this.taskEditor.show({
-            id: task.id,
-            uuid: task.uuid,
-            description: task.description,
-            tags: task.tags,
-            project: task.project,
-            priority: task.priority,
-            due: task.due,
-            scheduled: task.scheduled,
-            duration: task.estTime
-        });
-    }
+
 
     closeModal() {
         // Cette méthode est maintenant gérée par TaskEditor
@@ -566,4 +553,14 @@ document.addEventListener('DOMContentLoaded', () => {
     app = new TaskWarriorUI();
     // Initialiser taskCardManager avec le gestionnaire d'actions spécifique à main.js
     taskCardManager = new TaskCardManager(new ScriptTaskActionHandler());
+    
+    // Initialiser taskEditor comme variable globale
+    taskEditor = new TaskEditor({
+        showAllFields: true,
+        priorityFormat: 'letters',
+        language: 'en',
+        modalId: 'unified-task-editor',
+        onSave: (taskData, isEdit) => app.handleTaskSave(taskData, isEdit),
+        onCancel: () => app.handleTaskCancel()
+    });
 });

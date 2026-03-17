@@ -50,9 +50,7 @@ class TaskActionHandler {
         }
     }
     
-    openEditModal(task) {
-        this.onEditRequest(task);
-    }
+
     
     confirmDelete(taskUuid) {
         if (confirm('Are you sure you want to delete this task?')) {
@@ -81,7 +79,13 @@ class ScriptTaskActionHandler extends TaskActionHandler {
                 app.removeTaskCard(taskUuid);
                 app.tasks = app.tasks.filter(task => task.uuid !== taskUuid);
             },
-            onEditRequest: (task) => app.openEditModal(task),
+            onEditRequest: (task) => {
+                if (typeof taskEditor !== 'undefined') {
+                    taskEditor.showForTask(task);
+                } else {
+                    console.error('taskEditor is not defined');
+                }
+            },
             showNotification: (message, type) => app.showNotification(message, type)
         });
     }
@@ -295,7 +299,11 @@ class TaskCardManager {
                             const card = button.closest('.task-card');
                             if (card) {
                                 const taskData = JSON.parse(card.dataset.taskData);
-                                this.actionHandler.openEditModal(taskData);
+                                if (typeof taskEditor !== 'undefined') {
+                                    taskEditor.showForTask(taskData);
+                                } else {
+                                    console.error('taskEditor is not defined');
+                                }
                             }
                         } else {
                             this.actionHandler.performTaskAction(taskUuid, action);
