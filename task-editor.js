@@ -17,6 +17,8 @@ class TaskEditor {
         this.currentTask = null;
         this.onSave = options.onSave || (() => {});
         this.onCancel = options.onCancel || (() => {});
+        this.onSaveSuccess = options.onSaveSuccess || (() => {});
+        this.onSaveError = options.onSaveError || (() => {});
         
         this.init();
     }
@@ -291,8 +293,69 @@ class TaskEditor {
             taskData.uuid = this.currentTask.uuid;
         }
         
-        this.hide();
-        this.onSave(taskData, this.currentTask !== null);
+        // Appeler la nouvelle méthode de sauvegarde
+        this.saveTask(taskData, this.currentTask !== null);
+    }
+
+    async saveTask(taskData, isEdit) {
+        try {
+            const taskDataForAPI = this.prepareTaskDataForAPI(taskData, isEdit);
+            const endpoint = isEdit ? `/api/task/${taskData.uuid}/modify` : '/api/task/add';
+            const method = isEdit ? 'PUT' : 'POST';
+
+            const response = await fetch(endpoint, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(taskDataForAPI)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.onSaveSuccess(data.task, isEdit);
+                this.hide();
+            } else {
+                this.onSaveError(data.error || (isEdit ? 'Failed to update task' : 'Failed to add task'));
+            }
+        } catch (error) {
+            this.onSaveError('Network error: ' + error.message);
+        }
+    }
+
+    prepareTaskDataForAPI(taskData, isEdit) {
+        const preparedData = {
+            description: taskData.description,
+            tags: taskData.tags || [],
+            project: taskData.project || null,
+            priority: taskData.priority || null,
+            duration: taskData.duration || null
+        };
+
+        // Formater les dates si elles existent
+        if (taskData.due) {
+            preparedData.due = this.formatDateForTask(taskData.due);
+        }
+        if (taskData.scheduled) {
+            preparedData.scheduled = this.formatDateForTask(taskData.scheduled);
+        }
+
+        // Pour la modification, utiliser 'est' au lieu de 'duration'
+        if (isEdit && preparedData.duration) {
+            preparedData.est = preparedData.duration;
+            delete preparedData.duration;
+        }
+
+        return preparedData;
+    }
+
+    formatDateForTask(dateString) {
+        // Convertir le format datetime-local en format TaskWarrior
+        if (!dateString) return '';
+        
+        // Retourner la chaîne avec les secondes ajoutées si nécessaire
+        return dateString.length === 16 ? `${dateString}:00` : dateString;
     }
     
     formatDateForInput(dateString) {

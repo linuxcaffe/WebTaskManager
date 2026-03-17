@@ -185,12 +185,19 @@ class TaskWarriorUI {
     }
 
     // Gestionnaire unifié pour la sauvegarde des tâches (ajout et modification)
-    async handleTaskSave(taskData, isEdit) {
+    handleTaskSaveSuccess(task, isEdit) {
         if (isEdit) {
-            await this.saveTaskEdit(taskData);
+            // Mettre à jour la tâche dans le tableau local
+            const taskIndex = this.tasks.findIndex(t => t.uuid === task.uuid);
+            if (taskIndex !== -1) {
+                this.tasks[taskIndex] = task;
+            }
         } else {
-            await this.addTaskFromEditor(taskData);
+            // Ajouter la nouvelle tâche au début de la liste
+            this.tasks.unshift(task);
         }
+        this.renderTasks();
+        this.showNotification(isEdit ? 'Task updated successfully' : 'Tâche ajoutée avec succès', 'success');
     }
     
     // Gestionnaire pour l'annulation
@@ -198,85 +205,7 @@ class TaskWarriorUI {
         this.currentEditingTask = null;
     }
     
-    async saveTaskEdit(taskData) {
-        const modifiedTaskData = {
-            description: taskData.description,
-            tags: taskData.tags || [],
-            project: taskData.project || null,
-            priority: taskData.priority || null,
-            due: taskData.due ? this.formatDateForTask(taskData.due) : null,
-            scheduled: taskData.scheduled ? this.formatDateForTask(taskData.scheduled) : null,
-            est: taskData.duration || null
-        };
 
-        try {
-            const response = await fetch(`/api/task/${taskData.uuid}/modify`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(modifiedTaskData)
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Mettre à jour la tâche dans le tableau local
-                const taskIndex = this.tasks.findIndex(t => t.uuid === taskData.uuid);
-                if (taskIndex !== -1) {
-                    this.tasks[taskIndex] = data.task;
-                }
-                this.renderTasks();
-                this.showNotification('Task updated successfully', 'success');
-            } else {
-                this.showNotification(data.error || 'Failed to update task', 'error');
-            }
-        } catch (error) {
-            this.showNotification('Network error: ' + error.message, 'error');
-        }
-        finally {
-            this.taskEditor.hide();
-        }
-    }
-    
-    async addTaskFromEditor(taskData) {
-        const newTaskData = {
-            description: taskData.description,
-            tags: taskData.tags || [],
-            project: taskData.project || null,
-            priority: taskData.priority || null,
-            due: taskData.due ? this.formatDateForTask(taskData.due) : null,
-            scheduled: taskData.scheduled ? this.formatDateForTask(taskData.scheduled) : null,
-            duration: taskData.duration || null
-        };
-
-        try {
-            const response = await fetch('/api/task/add', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(newTaskData)
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                if (data.task) {
-                    this.tasks.unshift(data.task);
-                    this.renderTasks();
-                    this.showNotification('Tâche ajoutée avec succès', 'success');
-                } else {
-                    this.showNotification('La tâche a été créée mais n\'a pas pu être récupérée', 'warning');
-                    this.loadTasks();
-                }
-            } else {
-                this.showNotification(data.error || 'Échec de l\'ajout de la tâche', 'error');
-            }
-        } catch (error) {
-            this.showNotification('Network error: ' + error.message, 'error');
-        }
-    }
 
     // Filter tasks based on current context and advanced filters
     getFilteredTasks() {
@@ -560,7 +489,8 @@ document.addEventListener('DOMContentLoaded', () => {
         priorityFormat: 'letters',
         language: 'en',
         modalId: 'unified-task-editor',
-        onSave: (taskData, isEdit) => app.handleTaskSave(taskData, isEdit),
+        onSaveSuccess: (task, isEdit) => app.handleTaskSaveSuccess(task, isEdit),
+        onSaveError: (error) => app.showNotification(error, 'error'),
         onCancel: () => app.handleTaskCancel()
     });
 });
