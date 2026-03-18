@@ -320,6 +320,7 @@ class TaskEditor {
                 this.onSaveError(data.error || (isEdit ? 'Failed to update task' : 'Failed to add task'));
             }
         } catch (error) {
+            console.log('Network error: ' + error.message)
             this.onSaveError('Network error: ' + error.message);
         }
     }

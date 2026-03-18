@@ -33,7 +33,7 @@ class TaskActionHandler {
             const data = await response.json();
 
             if (data.success) {
-                if (action === 'delete') {
+                if (action === 'delete' || action === 'done') {
                     this.onTaskDelete(taskUuid);
                 } else if (data.task) {
                     this.onTaskUpdate(data.task);
