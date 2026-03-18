@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task Editor Templates</title>
+</head>
+<body>
+    <!-- Template pour la modale d'édition de tâche -->
+    <template id="task-editor-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="task-editor-title"><slot name="title">Add Task</slot></h3>
+                <span class="close task-editor-close">&times;</span>
+            </div>
+            <form id="task-editor-form">
+                <div class="form-group">
+                    <label for="task-editor-description"><slot name="description-label">Description</slot>:</label>
+                    <input type="text" id="task-editor-description" required>
+                </div>
+                
+                <div class="extended-fields" style="display: none;">
+                    <div class="form-group">
+                        <label for="task-editor-tags"><slot name="tags-label">Tags</slot>:</label>
+                        <input type="text" id="task-editor-tags" placeholder="Comma-separated tags">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="task-editor-project"><slot name="project-label">Project</slot>:</label>
+                        <input type="text" id="task-editor-project" placeholder="Project name">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="task-editor-priority"><slot name="priority-label">Priority</slot>:</label>
+                        <select id="task-editor-priority">
+                            <option value=""><slot name="no-priority">None</slot></option>
+                            <slot name="priority-options"></slot>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="task-editor-duration"><slot name="duration-label">Duration</slot>:</label>
+                        <input type="text" id="task-editor-duration" placeholder="e.g., 30min, 1h30m, 2d">
+                    </div>
+                </div>
+                
+                <div class="extended-dates" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="task-editor-due"><slot name="due-label">Due Date</slot>:</label>
+                            <input type="datetime-local" id="task-editor-due">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="task-editor-scheduled"><slot name="scheduled-label">Scheduled</slot>:</label>
+                            <input type="datetime-local" id="task-editor-scheduled">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary" id="task-editor-save">
+                        <slot name="save-button">Save</slot>
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="task-editor-cancel">
+                        <slot name="cancel-button">Cancel</slot>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </template>
+</body>
+</html>

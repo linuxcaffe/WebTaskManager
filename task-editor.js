@@ -15,6 +15,7 @@ class TaskEditor {
         };
         
         this.currentTask = null;
+        this.template = null;
         this.onSave = options.onSave || (() => {});
         this.onCancel = options.onCancel || (() => {});
         this.onSaveSuccess = options.onSaveSuccess || (() => {});
@@ -38,82 +39,105 @@ class TaskEditor {
         const modal = document.createElement('div');
         modal.id = this.options.modalId;
         modal.className = 'modal task-editor-modal';
-        modal.innerHTML = this.getModalHTML();
         
         document.body.appendChild(modal);
         this.modal = modal;
+        
+        // Charger et appliquer le template
+        this.loadTemplate().then(() => {
+            if (this.template) {
+                this.renderModal();
+            }
+        });
     }
     
-    getModalHTML() {
+    async loadTemplate() {
+        try {
+            const response = await fetch('task-editor-templates.html');
+            const html = await response.text();
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            
+            this.template = tempDiv.querySelector('#task-editor-modal');
+            if (!this.template) {
+                console.error('Template task-editor-modal non trouvé');
+                return;
+            }
+            
+            document.body.appendChild(this.template);
+        } catch (error) {
+            console.error('Erreur lors du chargement du template:', error);
+        }
+    }
+    
+    renderModal() {
+        if (!this.template) return;
+        
+        const templateContent = this.template.content.cloneNode(true);
+        this.modal.appendChild(templateContent);
+        
+        // Remplir les slots avec les textes appropriés
+        this.populateTemplate();
+        
+        // Re-lier les événements après le rendu
+        this.bindEvents();
+    }
+    
+    populateTemplate() {
         const texts = this.getTexts();
         const priorityOptions = this.getPriorityOptions();
         
-        return `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 id="task-editor-title">${texts.addTask}</h3>
-                    <span class="close task-editor-close">&times;</span>
-                </div>
-                <form id="task-editor-form">
-                    <div class="form-group">
-                        <label for="task-editor-description">${texts.description}:</label>
-                        <input type="text" id="task-editor-description" required>
-                    </div>
-                    
-                    ${this.options.showAllFields ? `
-                    <div class="form-group">
-                        <label for="task-editor-tags">${texts.tags}:</label>
-                        <input type="text" id="task-editor-tags" placeholder="${texts.tagsPlaceholder}">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="task-editor-project">${texts.project}:</label>
-                        <input type="text" id="task-editor-project" placeholder="${texts.projectPlaceholder}">
-                    </div>
-                    ` : ''}
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="task-editor-priority">${texts.priority}:</label>
-                            <select id="task-editor-priority">
-                                <option value="">${texts.noPriority}</option>
-                                ${priorityOptions.map(option => 
-                                    `<option value="${option.value}">${option.label}</option>`
-                                ).join('')}
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="task-editor-duration">${texts.duration}:</label>
-                            <input type="text" id="task-editor-duration" placeholder="${texts.durationPlaceholder}">
-                        </div>
-                    </div>
-                    
-                    ${this.options.showAllFields ? `
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="task-editor-due">${texts.dueDate}:</label>
-                            <input type="datetime-local" id="task-editor-due">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="task-editor-scheduled">${texts.scheduled}:</label>
-                            <input type="datetime-local" id="task-editor-scheduled">
-                        </div>
-                    </div>
-                    ` : ''}
-                    
-                    <div class="modal-actions">
-                        <button type="submit" class="btn btn-primary" id="task-editor-save">
-                            ${texts.save}
-                        </button>
-                        <button type="button" class="btn btn-secondary" id="task-editor-cancel">
-                            ${texts.cancel}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        `;
+        // Remplir les slots de texte
+        const slots = {
+            'title': texts.addTask,
+            'description-label': texts.description,
+            'tags-label': texts.tags,
+            'tags-placeholder': texts.tagsPlaceholder,
+            'project-label': texts.project,
+            'project-placeholder': texts.projectPlaceholder,
+            'priority-label': texts.priority,
+            'no-priority': texts.noPriority,
+            'duration-label': texts.duration,
+            'duration-placeholder': texts.durationPlaceholder,
+            'due-label': texts.dueDate,
+            'scheduled-label': texts.scheduled,
+            'save-button': texts.save,
+            'cancel-button': texts.cancel
+        };
+        
+        // Remplir les slots
+        Object.entries(slots).forEach(([name, value]) => {
+            const slot = this.modal.querySelector(`slot[name="${name}"]`);
+            if (slot) {
+                slot.textContent = value;
+            }
+        });
+        
+        // Remplir les options de priorité
+        const prioritySelect = this.modal.querySelector('#task-editor-priority');
+        const priorityOptionsSlot = this.modal.querySelector('slot[name="priority-options"]');
+        if (prioritySelect && priorityOptionsSlot) {
+            const fragment = document.createDocumentFragment();
+            priorityOptions.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option.value;
+                opt.textContent = option.label;
+                fragment.appendChild(opt);
+            });
+            priorityOptionsSlot.replaceWith(fragment);
+        }
+        
+        // Gérer l'affichage des champs étendus
+        this.toggleExtendedFields(this.options.showAllFields);
+    }
+    
+    toggleExtendedFields(show) {
+        const extendedFields = this.modal.querySelector('.extended-fields');
+        const extendedDates = this.modal.querySelector('.extended-dates');
+        
+        if (extendedFields) extendedFields.style.display = show ? 'block' : 'none';
+        if (extendedDates) extendedDates.style.display = show ? 'block' : 'none';
     }
     
     getTexts() {
@@ -173,10 +197,16 @@ class TaskEditor {
     }
     
     bindEvents() {
-        // Événement de fermeture
-        this.modal.querySelector('.task-editor-close').addEventListener('click', () => {
-            this.hide();
-        });
+        // Vérifier que les éléments existent avant d'ajouter les événements
+        const closeBtn = this.modal.querySelector('.task-editor-close');
+        const cancelBtn = this.modal.querySelector('#task-editor-cancel');
+        const form = this.modal.querySelector('#task-editor-form');
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                this.hide();
+            });
+        }
         
         // Fermeture en cliquant à l'extérieur
         this.modal.addEventListener('click', (e) => {
@@ -185,17 +215,20 @@ class TaskEditor {
             }
         });
         
-        // Événement d'annulation
-        this.modal.querySelector('#task-editor-cancel').addEventListener('click', () => {
-            this.hide();
-            this.onCancel();
-        });
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                this.hide();
+                this.onCancel();
+            });
+        }
         
         // Événement de soumission du formulaire
-        this.modal.querySelector('#task-editor-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleSave();
-        });
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleSave();
+            });
+        }
         
         // Échap pour fermer
         document.addEventListener('keydown', (e) => {
@@ -207,14 +240,21 @@ class TaskEditor {
     
     show(task = null) {
         this.currentTask = task;
+        
+        // Assurer que le modal et le template sont chargés
+        if (!this.modal || !this.template) {
+            this.createModal();
+            return;
+        }
+        
         const title = this.modal.querySelector('#task-editor-title');
         const texts = this.getTexts();
         
         if (task) {
-            title.textContent = texts.editTask;
+            if (title) title.textContent = texts.editTask;
             this.populateForm(task);
         } else {
-            title.textContent = texts.addTask;
+            if (title) title.textContent = texts.addTask;
             this.clearForm();
         }
         
@@ -222,10 +262,11 @@ class TaskEditor {
         
         // Focus sur le premier champ
         setTimeout(() => {
-            this.modal.querySelector('#task-editor-description').focus();
+            const descField = this.modal.querySelector('#task-editor-description');
+            if (descField) descField.focus();
         }, 100);
     }
-
+    
     showForTask(task) {
         this.show(task);
     }
@@ -237,11 +278,16 @@ class TaskEditor {
     
     populateForm(task) {
         const form = this.modal.querySelector('#task-editor-form');
+        if (!form) return;
         
         // Champs de base
-        form.querySelector('#task-editor-description').value = task.description || '';
-        form.querySelector('#task-editor-priority').value = task.priority || '';
-        form.querySelector('#task-editor-duration').value = task.duration || '';
+        const descField = form.querySelector('#task-editor-description');
+        const priorityField = form.querySelector('#task-editor-priority');
+        const durationField = form.querySelector('#task-editor-duration');
+        
+        if (descField) descField.value = task.description || '';
+        if (priorityField) priorityField.value = task.priority || '';
+        if (durationField) durationField.value = task.duration || '';
         
         // Champs étendus si disponibles
         if (this.options.showAllFields) {
@@ -259,12 +305,12 @@ class TaskEditor {
     
     clearForm() {
         const form = this.modal.querySelector('#task-editor-form');
-        form.reset();
+        if (form) form.reset();
     }
     
     handleSave() {
         const form = this.modal.querySelector('#task-editor-form');
-        const formData = new FormData(form);
+        if (!form) return;
         
         const taskData = {
             description: form.querySelector('#task-editor-description').value,
@@ -296,13 +342,13 @@ class TaskEditor {
         // Appeler la nouvelle méthode de sauvegarde
         this.saveTask(taskData, this.currentTask !== null);
     }
-
+    
     async saveTask(taskData, isEdit) {
         try {
             const taskDataForAPI = this.prepareTaskDataForAPI(taskData, isEdit);
             const endpoint = isEdit ? `/api/task/${taskData.uuid}/modify` : '/api/task/add';
             const method = isEdit ? 'PUT' : 'POST';
-
+            
             const response = await fetch(endpoint, {
                 method,
                 headers: {
@@ -310,9 +356,9 @@ class TaskEditor {
                 },
                 body: JSON.stringify(taskDataForAPI)
             });
-
+            
             const data = await response.json();
-
+            
             if (data.success) {
                 this.onSaveSuccess(data.task, isEdit);
                 this.hide();
@@ -320,11 +366,10 @@ class TaskEditor {
                 this.onSaveError(data.error || (isEdit ? 'Failed to update task' : 'Failed to add task'));
             }
         } catch (error) {
-            console.log('Network error: ' + error.message)
             this.onSaveError('Network error: ' + error.message);
         }
     }
-
+    
     prepareTaskDataForAPI(taskData, isEdit) {
         const preparedData = {
             description: taskData.description,
@@ -333,7 +378,7 @@ class TaskEditor {
             priority: taskData.priority || null,
             duration: taskData.duration || null
         };
-
+        
         // Formater les dates si elles existent
         if (taskData.due) {
             preparedData.due = this.formatDateForTask(taskData.due);
@@ -341,16 +386,16 @@ class TaskEditor {
         if (taskData.scheduled) {
             preparedData.scheduled = this.formatDateForTask(taskData.scheduled);
         }
-
+        
         // Pour la modification, utiliser 'est' au lieu de 'duration'
         if (isEdit && preparedData.duration) {
             preparedData.est = preparedData.duration;
             delete preparedData.duration;
         }
-
+        
         return preparedData;
     }
-
+    
     formatDateForTask(dateString) {
         // Convertir le format datetime-local en format TaskWarrior
         if (!dateString) return '';
