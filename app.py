@@ -186,12 +186,11 @@ def delete_task(task_id):
 def modify_task(task_id):
     """Modify a task"""
     data = request.get_json()
-    
     modifications = []
-    
+
     if 'description' in data and data['description']:
         modifications.append(f'description:"{data["description"]}"')
-    
+
     if 'tags' in data:
         # First clear all existing tags, then add new ones
         clear_result = run_task_command(f'task rc.confirmation=off {task_id} modify -TAGS')
@@ -200,19 +199,19 @@ def modify_task(task_id):
             for tag in data['tags']:
                 if tag and tag.strip():
                     modifications.append(f'+{tag.strip()}')
-    
+
     if 'due' in data:
         if data['due']:
             modifications.append(f'due:"{data["due"]}"')
         else:
             modifications.append('due:')
-    
+
     if 'scheduled' in data:
         if data['scheduled']:
             modifications.append(f'scheduled:"{data["scheduled"]}"')
         else:
             modifications.append('scheduled:')
-    
+
     if 'priority' in data:
         if data['priority']:
             modifications.append(f'priority:{data["priority"]}')
@@ -227,18 +226,41 @@ def modify_task(task_id):
             
     if 'estTime' in data and data['estTime']:
         modifications.append(f'estTime:{data["estTime"]}')
-    
+
     if modifications:
         mod_string = ' '.join(modifications)
         result = run_task_command(f'task rc.confirmation=off {task_id} modify {mod_string}')
+        
+        if result['success']:
+            # Exporter la tâche modifiée pour obtenir les données complètes
+            export_result = run_task_command(f'task {task_id} export')
+            if export_result['success'] and export_result['stdout'].strip():
+                try:
+                    task = json.loads(export_result['stdout'])
+                    if task:  # Vérifier que la liste des tâches n'est pas vide
+                        return jsonify({
+                            'success': True,
+                            'message': result['stdout'],
+                            'task': task[0]  # Prendre la première tâche
+                        })
+                except (json.JSONDecodeError, IndexError) as e:
+                    print(f"Error parsing task data: {e}")
+                    return jsonify({
+                        'success': True,
+                        'message': result['stdout'],
+                        'task': None
+                    })
+        
         return jsonify({
             'success': result['success'],
-            'message': result['stdout'] if result['success'] else result['stderr']
+            'message': result['stdout'] if result['success'] else result['stderr'],
+            'task': None
         })
     else:
         return jsonify({
             'success': True,
-            'message': 'No changes to apply'
+            'message': 'No changes to apply',
+            'task': None
         })
 
 @app.route('/api/task/add', methods=['POST'])
