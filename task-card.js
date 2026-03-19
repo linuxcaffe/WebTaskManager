@@ -190,8 +190,19 @@ class TaskCardManager {
             if (e.target.closest('.toggle-mode-btn') || e.target.closest('.btn')) {
                 return;
             }
-            // Optionnel: tu peux ajouter ici ton propre comportement de clic
-            // console.log('Task card clicked:', task.uuid);
+            
+            // Basculer la classe 'selected' sur la carte
+            card.classList.toggle('selected');
+            
+            // Dispatcher un événement personnalisé avec les données de la tâche
+            const taskSelectedEvent = new CustomEvent('taskSelected', {
+                detail: {
+                    taskData: task,
+                    cardElement: card
+                },
+                bubbles: true
+            });
+            card.dispatchEvent(taskSelectedEvent);
         });
 
         return card;

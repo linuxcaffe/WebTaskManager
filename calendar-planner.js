@@ -28,6 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTasks();
     console.log('SetupTasksSelection');
     console.log('Setup Task Selection Done');
+    
+    // Ajouter un écouteur d'événements pour les événements taskSelected
+    document.addEventListener('taskSelected', (e) => {
+        handleTaskCardClick(e.detail.cardElement);
+    });
 });
 
 /**
@@ -594,6 +599,7 @@ function handleTaskCardClick(cardElement) {
         cardElement.classList.remove('selected');
         selectedTaskCard = null;
         selectedTaskData = null;
+        tempEventData = null;
     } else {
         // Select the new card
         cardElement.classList.add('selected');
@@ -601,6 +607,7 @@ function handleTaskCardClick(cardElement) {
         selectedTaskData = JSON.parse(cardElement.dataset.taskData);
         
         console.log('Task selected:', selectedTaskData.description);
+        console.log('tempEventData updated:', tempEventData);
     }
 }
 /**
