@@ -410,25 +410,29 @@ class TaskEditor {
         // Retourner la chaîne avec les secondes ajoutées si nécessaire
         return dateString.length === 16 ? `${dateString}:00` : dateString;
     }
-    
+
     formatDateForInput(dateString) {
+        // Convert TaskWarrior date format to HTML datetime-local format
         if (!dateString) return '';
         
-        try {
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) return '';
+        // Handle TaskWarrior format: 20250131T055530Z
+        if (/^\d{8}T\d{6}Z$/.test(dateString)) {
+            const year = dateString.substring(0, 4);
+            const month = dateString.substring(4, 6);
+            const day = dateString.substring(6, 8);
+            const hour = dateString.substring(9, 11);
+            const minute = dateString.substring(11, 13);
+            const second = dateString.substring(13, 15);
             
-            // Format pour datetime-local input
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            
-            return `${year}-${month}-${day}T${hours}:${minutes}`;
-        } catch (e) {
-            return '';
+            // Create ISO format string: YYYY-MM-DDTHH:MM:SSZ
+            const isoString = `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+            const date = new Date(isoString);
+            return date.toISOString().slice(0, 16);
         }
+        
+        // Fallback for other date formats
+        const date = new Date(dateString);
+        return date.toISOString().slice(0, 16);
     }
     
     // Méthode utilitaire pour convertir entre les formats de priorité
