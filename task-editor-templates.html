@@ -25,7 +25,8 @@
                     
                     <div class="form-group">
                         <label for="task-editor-project"><slot name="project-label">Project</slot>:</label>
-                        <input type="text" id="task-editor-project" placeholder="Project name">
+                        <input type="text" id="task-editor-project" placeholder="Project name" list="task-editor-project-options">
+                        <datalist id="task-editor-project-options"></datalist>
                     </div>
                 </div>
                 

@@ -11,6 +11,8 @@ class TaskEditor {
             priorityFormat: 'letters', // 'letters' (H/M/L) ou 'words' (high/medium/low)
             language: 'fr', // 'fr' ou 'en'
             modalId: 'task-editor-modal',
+            inline: false, // Mode inline ou modal
+            containerId: null, // ID du conteneur pour le mode inline
             ...options
         };
         
@@ -25,7 +27,11 @@ class TaskEditor {
     }
     
     init() {
-        this.createModal();
+        if (this.options.inline) {
+            this.createInlineContainer();
+        } else {
+            this.createModal();
+        }
         this.bindEvents();
     }
     
@@ -47,6 +53,26 @@ class TaskEditor {
         this.loadTemplate().then(() => {
             if (this.template) {
                 this.renderModal();
+            }
+        });
+    }
+    
+    createInlineContainer() {
+        const container = document.getElementById(this.options.containerId);
+        if (!container) {
+            console.error(`Container with id "${this.options.containerId}" not found`);
+            return;
+        }
+        
+        // Charger et appliquer le template
+        this.loadTemplate().then(() => {
+            if (this.template) {
+                container.innerHTML = '';
+                const templateContent = this.template.content.cloneNode(true);
+                container.appendChild(templateContent);
+                this.modal = container.querySelector('.modal-content');
+                this.populateTemplate();
+                this.bindEvents();
             }
         });
     }
@@ -246,7 +272,11 @@ class TaskEditor {
         
         // Assurer que le modal et le template sont chargés
         if (!this.modal || !this.template) {
-            this.createModal();
+            if (this.options.inline) {
+                this.createInlineContainer();
+            } else {
+                this.createModal();
+            }
             return;
         }
         
@@ -261,7 +291,11 @@ class TaskEditor {
             this.clearForm();
         }
         
-        this.modal.style.display = 'block';
+        if (this.options.inline) {
+            this.modal.style.display = 'block';
+        } else {
+            this.modal.style.display = 'block';
+        }
         
         // Focus sur le premier champ
         setTimeout(() => {
@@ -275,7 +309,11 @@ class TaskEditor {
     }
     
     hide() {
-        this.modal.style.display = 'none';
+        if (this.options.inline) {
+            this.clearForm();
+        } else {
+            this.modal.style.display = 'none';
+        }
         this.currentTask = null;
     }
     
@@ -455,8 +493,32 @@ class TaskEditor {
     // Méthode pour détruire le composant
     destroy() {
         if (this.modal) {
-            this.modal.remove();
+            if (this.options.inline) {
+                this.modal.innerHTML = '';
+            } else {
+                this.modal.remove();
+            }
         }
+    }
+    
+    // Méthode pour mettre à jour les suggestions de projets
+    updateProjectSuggestions(projects = []) {
+        if (!this.options.showAllFields) return;
+        
+        const datalist = this.modal?.querySelector('#task-editor-project-options');
+        if (!datalist) return;
+        
+        // Vider les options existantes
+        datalist.innerHTML = '';
+        
+        // Ajouter les nouveaux projets
+        projects.forEach(project => {
+            if (project) {
+                const option = document.createElement('option');
+                option.value = project;
+                datalist.appendChild(option);
+            }
+        });
     }
 }
 
