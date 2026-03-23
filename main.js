@@ -21,14 +21,14 @@ class TaskWarriorUI {
             onCancel: () => this.handleTaskCancel()
         });
         
-        // Initialiser le composant TaskCreator
-        this.taskCreator = new TaskCreator({
+        // Initialiser le composant TaskEditor en mode inline
+        this.taskCreator = new TaskEditor({
             showAllFields: true,
             priorityFormat: 'letters',
             language: 'en',
             containerId: 'task-creator-container',
             inline: true,
-            onSubmit: (taskData) => this.handleTaskCreate(taskData)
+            onSave: (taskData) => this.handleTaskCreate(taskData)
         });
         
         // Attendre que les composants soient initialisés avant de charger les tâches
@@ -357,7 +357,7 @@ class TaskWarriorUI {
         }
     }
 
-    // Cette méthode n'est plus nécessaire car TaskCreator gère son propre nettoyage
+    // Cette méthode n'est plus nécessaire car TaskEditor gère son propre nettoyage
 
     showLoading(show) {
         const loading = document.getElementById('loading');

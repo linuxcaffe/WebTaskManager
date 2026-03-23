@@ -19,14 +19,14 @@ class DayPlanner {
             onCancel: () => this.handleTaskCancel()
         });
         
-        // Initialiser le composant TaskCreator en mode modal
-        this.taskCreator = new TaskCreator({
+        // Initialiser le composant TaskEditor en mode modal
+        this.taskCreator = new TaskEditor({
             showAllFields: true, // Afficher tous les champs
             priorityFormat: 'words', // high/medium/low
             language: 'fr',
-            containerId: 'day-planner-task-creator-modal',
+            modalId: 'day-planner-task-creator-modal',
             inline: false, // Mode modal
-            onSubmit: (taskData) => this.handleTaskCreate(taskData),
+            onSave: (taskData) => this.handleTaskCreate(taskData),
             onCancel: () => this.closeTaskCreatorModal()
         });
         
@@ -196,28 +196,22 @@ class DayPlanner {
         this.renderTasks();
     }
     
-    // Créer le container pour le modal TaskCreator
+    // Créer le container pour le modal TaskEditor
     createTaskCreatorModal() {
-        const modalContainer = document.createElement('div');
-        modalContainer.id = 'day-planner-task-creator-modal';
-        modalContainer.className = 'modal';
-        modalContainer.style.display = 'none';
-        document.body.appendChild(modalContainer);
+        // Le modal est maintenant géré par TaskEditor, donc cette méthode n'est plus nécessaire
     }
     
     // Ouvrir le modal de création de tâche
     openTaskCreatorModal() {
-        const modal = document.getElementById('day-planner-task-creator-modal');
-        if (modal) {
-            modal.style.display = 'block';
+        if (this.taskCreator) {
+            this.taskCreator.show();
         }
     }
     
     // Fermer le modal de création de tâche
     closeTaskCreatorModal() {
-        const modal = document.getElementById('day-planner-task-creator-modal');
-        if (modal) {
-            modal.style.display = 'none';
+        if (this.taskCreator) {
+            this.taskCreator.hide();
         }
     }
     

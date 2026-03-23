@@ -31,8 +31,8 @@ class TaskEditor {
             this.createInlineContainer();
         } else {
             this.createModal();
+            this.bindEvents();
         }
-        this.bindEvents();
     }
     
     createModal() {
