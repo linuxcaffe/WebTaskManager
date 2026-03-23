@@ -287,7 +287,7 @@ class TaskEditor {
         
         if (descField) descField.value = task.description || '';
         if (priorityField) priorityField.value = task.priority || '';
-        if (durationField) durationField.value = task.duration || '';
+        if (durationField) durationField.value = task.estTime || '';
         
         // Champs étendus si disponibles
         if (this.options.showAllFields) {
@@ -389,7 +389,7 @@ class TaskEditor {
         
         // Pour la modification, utiliser 'est' au lieu de 'duration'
         if (isEdit && preparedData.duration) {
-            preparedData.est = preparedData.duration;
+            preparedData.estTime = preparedData.duration;
             delete preparedData.duration;
         }
         
