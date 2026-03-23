@@ -116,16 +116,19 @@ class TaskEditor {
         
         // Remplir les options de priorité
         const prioritySelect = this.modal.querySelector('#task-editor-priority');
-        const priorityOptionsSlot = this.modal.querySelector('slot[name="priority-options"]');
-        if (prioritySelect && priorityOptionsSlot) {
-            const fragment = document.createDocumentFragment();
+        if (prioritySelect) {
+            // Supprimer les options existantes (sauf la première option "None")
+            while (prioritySelect.options.length > 1) {
+                prioritySelect.remove(1);
+            }
+            
+            // Ajouter les nouvelles options
             priorityOptions.forEach(option => {
                 const opt = document.createElement('option');
                 opt.value = option.value;
                 opt.textContent = option.label;
-                fragment.appendChild(opt);
+                prioritySelect.appendChild(opt);
             });
-            priorityOptionsSlot.replaceWith(fragment);
         }
         
         // Gérer l'affichage des champs étendus
@@ -286,7 +289,11 @@ class TaskEditor {
         const durationField = form.querySelector('#task-editor-duration');
         
         if (descField) descField.value = task.description || '';
-        if (priorityField) priorityField.value = task.priority || '';
+        if (priorityField) {
+            // Convertir la priorité au format attendu par la liste déroulante
+            const priorityValue = task.priority ?  task.priority : '';
+            priorityField.value = priorityValue;
+        }
         if (durationField) durationField.value = task.estTime || '';
         
         // Champs étendus si disponibles
@@ -430,9 +437,11 @@ class TaskEditor {
             'H': 'high',
             'M': 'medium', 
             'L': 'low',
+            '': 'None', 
             'high': 'H',
             'medium': 'M',
-            'low': 'L'
+            'low': 'L',
+            'None': ''
         };
         
         if (fromFormat === toFormat) return priority;
