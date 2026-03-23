@@ -183,7 +183,6 @@ class TaskCardManager {
         // Ajouter les données de la tâche à l'élément
         card.dataset.taskId = task.uuid;
         card.dataset.taskData = JSON.stringify(task).replace(/'/g, "&apos;");
-        console.log('Task data stored in dataset:', task);
 
         // Ajouter un gestionnaire d'événements pour la sélection
         card.addEventListener('click', function(e) {
