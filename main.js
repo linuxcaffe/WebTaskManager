@@ -28,7 +28,16 @@ class TaskWarriorUI {
             language: 'en',
             containerId: 'task-creator-container',
             inline: true,
-            onSave: (taskData) => this.handleTaskCreate(taskData)
+            onSaveSuccess: (task, isEdit) => {
+                if (!isEdit) {
+                    this.tasks.unshift(task);
+                    this.renderTasks();
+                    this.showNotification('Tâche ajoutée avec succès', 'success');
+                }
+            },
+            onSaveError: (error) => {
+                this.showNotification(error || 'Échec de l\'ajout de la tâche', 'error');
+            }
         });
         
         // Attendre que les composants soient initialisés avant de charger les tâches
@@ -71,10 +80,7 @@ class TaskWarriorUI {
         });
     }
 
-    // Gestionnaire unifié pour la création de tâches
-    handleTaskCreate(taskData) {
-        this.addTaskFromCreator(taskData);
-    }
+
 
     handleEditTask(e) {
         e.preventDefault();
@@ -134,45 +140,7 @@ class TaskWarriorUI {
         });
     }
 
-    async addTaskFromCreator(taskData) {
-        const newTaskData = {
-            description: taskData.description,
-            tags: taskData.tags || [],
-            project: taskData.project || null,
-            priority: taskData.priority || null,
-            due: taskData.due ? this.formatDateForTask(taskData.due) : null,
-            scheduled: taskData.scheduled ? this.formatDateForTask(taskData.scheduled) : null,
-            duration: taskData.duration || null
-        };
 
-        try {
-            const response = await fetch('/api/task/add', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(newTaskData)
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                if (data.task) {
-                    this.tasks.unshift(data.task);
-                    this.renderTasks();
-                    this.showNotification('Tâche ajoutée avec succès', 'success');
-                    // Le TaskCreator se vide automatiquement
-                } else {
-                    this.showNotification('La tâche a été créée mais n\'a pas pu être récupérée', 'warning');
-                    this.loadTasks();
-                }
-            } else {
-                this.showNotification(data.error || 'Échec de l\'ajout de la tâche', 'error');
-            }
-        } catch (error) {
-            this.showNotification('Network error: ' + error.message, 'error');
-        }
-    }
 
 
 
