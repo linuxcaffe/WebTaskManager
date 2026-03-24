@@ -472,6 +472,31 @@ class TaskEditor {
         const date = new Date(dateString);
         return date.toISOString().slice(0, 16);
     }
+
+    formatDurationString(durationString) {
+        // Format TaskWarrior duration (e.g., "PT2H30M" or "2h30min") for display
+        if (!durationString) return '';
+        
+        // Handle ISO 8601 duration format (PT2H30M)
+        if (durationString.startsWith('PT')) {
+            const match = durationString.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+            if (match) {
+                const hours = parseInt(match[1] || 0);
+                const minutes = parseInt(match[2] || 0);
+                const seconds = parseInt(match[3] || 0);
+                
+                let result = '';
+                if (hours > 0) result += `${hours}h `;
+                if (minutes > 0) result += `${minutes}m `;
+                if (seconds > 0) result += `${seconds}s`;
+                
+                return result.trim() || '0s';
+            }
+        }
+        
+        // Handle simple format (2h30min, 1.5h, etc.)
+        return durationString;
+    }
     
     // Méthode utilitaire pour convertir entre les formats de priorité
     static convertPriority(priority, fromFormat, toFormat) {

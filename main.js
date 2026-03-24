@@ -82,11 +82,6 @@ class TaskWarriorUI {
 
 
 
-    handleEditTask(e) {
-        e.preventDefault();
-        this.saveTaskEdit();
-    }
-
     async loadTasks() {
         try {
             this.showLoading(true);
@@ -140,17 +135,6 @@ class TaskWarriorUI {
         });
     }
 
-
-
-
-
-
-
-    closeModal() {
-        // Cette méthode est maintenant gérée par TaskEditor
-        this.taskEditor.hide();
-        this.currentEditingTask = null;
-    }
 
     // Gestionnaire unifié pour la sauvegarde des tâches (ajout et modification)
     handleTaskSaveSuccess(task, isEdit) {
@@ -351,66 +335,6 @@ class TaskWarriorUI {
         setTimeout(() => {
             notification.classList.remove('show');
         }, 3000);
-    }
-
-    formatDateForTask(dateString) {
-        // Convert HTML datetime-local input to local date string without timezone
-        // Input format: 'YYYY-MM-DDTHH:MM' (local time)
-        // Output format: 'YYYY-MM-DDTHH:MM:00' (local time, no timezone)
-        if (!dateString) return '';
-        
-        // Return the input string with seconds added if needed
-        return dateString.length === 16 ? `${dateString}:00` : dateString;
-    }
-
-
-    formatDisplayDate(dateString) {
-        // Format TaskWarrior date format (YYYYMMDDTHHMMSSZ) for display
-        if (!dateString) return '';
-        
-        // Handle TaskWarrior format: 20250131T055530Z
-        if (/^\d{8}T\d{6}Z$/.test(dateString)) {
-            const year = dateString.substring(0, 4);
-            const month = dateString.substring(4, 6);
-            const day = dateString.substring(6, 8);
-            const hour = dateString.substring(9, 11);
-            const minute = dateString.substring(11, 13);
-            const second = dateString.substring(13, 15);
-            
-            // Create ISO format string: YYYY-MM-DDTHH:MM:SSZ
-            const isoString = `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
-            const date = new Date(isoString);
-            return date.toLocaleString();
-        }
-        
-        // Fallback for other date formats
-        const date = new Date(dateString);
-        return date.toLocaleString();
-    }
-
-    formatDuration(durationString) {
-        // Format TaskWarrior duration (e.g., "PT2H30M" or "2h30min") for display
-        if (!durationString) return '';
-        
-        // Handle ISO 8601 duration format (PT2H30M)
-        if (durationString.startsWith('PT')) {
-            const match = durationString.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-            if (match) {
-                const hours = parseInt(match[1] || 0);
-                const minutes = parseInt(match[2] || 0);
-                const seconds = parseInt(match[3] || 0);
-                
-                let result = '';
-                if (hours > 0) result += `${hours}h `;
-                if (minutes > 0) result += `${minutes}m `;
-                if (seconds > 0) result += `${seconds}s`;
-                
-                return result.trim() || '0s';
-            }
-        }
-        
-        // Handle simple format (2h30min, 1.5h, etc.)
-        return durationString;
     }
 
     escapeHtml(text) {
