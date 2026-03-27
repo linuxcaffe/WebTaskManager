@@ -241,6 +241,12 @@ body {
     min-height: calc(100vh - 80px); /* Hauteur de l'écran moins l'en-tête */
 }
 
+@media (max-width: 768px) {
+    .main-content {
+        min-height: 100vh; /* Pleine hauteur pour les écrans mobiles */
+    }
+}
+
 .calendar-column {
     display: flex;
     flex-direction: column;
