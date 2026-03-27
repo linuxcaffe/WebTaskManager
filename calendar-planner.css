@@ -588,13 +588,32 @@ body {
     }
     
     .calendar-header {
-        flex-direction: column;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem;
+        gap: 0.5rem;
+    }
+    
+    .calendar-title {
+        flex-direction: row;
+        align-items: center;
         gap: 1rem;
     }
     
     .view-controls {
-        width: 100%;
-        justify-content: center;
+        flex-direction: row;
+        gap: 0.25rem;
+    }
+    
+    .view-btn {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.75rem;
+    }
+    
+    .nav-btn {
+        padding: 0.3rem 0.6rem;
+        font-size: 1rem;
     }
     
     .tasks-filters {
@@ -614,6 +633,15 @@ body {
     
     .task-card {
         padding: 0.75rem;
+    }
+    
+    .calendar-title h2 {
+        font-size: 1.2rem;
+    }
+    
+    .view-btn {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.7rem;
     }
 }
 
