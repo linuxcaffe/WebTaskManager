@@ -12,6 +12,10 @@ import os
 import re
 from datetime import datetime
 from config import DEVELOPER_MODE, DEBUG_FILE
+try:
+    from config import KANBAN_COLUMNS
+except ImportError:
+    KANBAN_COLUMNS = ['backlog', 'todo', 'doing', 'review', 'done']
 
 def log_command(command):
     """Log the command to the debug file with a timestamp"""
@@ -227,6 +231,12 @@ def modify_task(task_id):
     if 'estTime' in data and data['estTime']:
         modifications.append(f'estTime:{data["estTime"]}')
 
+    if 'state' in data:
+        if data['state']:
+            modifications.append(f'state:{data["state"]}')
+        else:
+            modifications.append('state:')
+
     if modifications:
         mod_string = ' '.join(modifications)
         result = run_task_command(f'task rc.confirmation=off {task_id} modify {mod_string}')
@@ -262,6 +272,12 @@ def modify_task(task_id):
             'message': 'No changes to apply',
             'task': None
         })
+
+@app.route('/api/kanban/columns')
+def get_kanban_columns():
+    """Return configured kanban column names"""
+    return jsonify({'success': True, 'columns': KANBAN_COLUMNS})
+
 
 @app.route('/api/task/add', methods=['POST'])
 def add_task():
