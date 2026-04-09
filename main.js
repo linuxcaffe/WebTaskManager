@@ -32,17 +32,18 @@ class TaskWarriorUI {
                 if (!isEdit) {
                     this.tasks.unshift(task);
                     this.renderTasks();
-                    this.showNotification('Tâche ajoutée avec succès', 'success');
+                    this.showNotification('Task added successfully', 'success');
                 }
             },
             onSaveError: (error) => {
-                this.showNotification(error || 'Échec de l\'ajout de la tâche', 'error');
+                this.showNotification(error || 'Failed to add task', 'error');
             }
         });
         
-        // Attendre que les composants soient initialisés avant de charger les tâches
+        // Wait for components to initialise before loading data
         setTimeout(() => {
             this.initializeEventListeners();
+            this.loadContexts();
             this.loadTasks();
             this.updateProjectSuggestions();
         }, 100);
@@ -51,9 +52,10 @@ class TaskWarriorUI {
     initializeEventListeners() {
         document.getElementById('refresh-btn').addEventListener('click', () => this.loadTasks());
         
-        // Add context selection event listeners
-        document.querySelectorAll('.context-option').forEach(button => {
-            button.addEventListener('click', (e) => this.setContext(e.target.getAttribute('data-context')));
+        // Context buttons are added dynamically — delegate to the container
+        document.getElementById('context-options').addEventListener('click', (e) => {
+            const btn = e.target.closest('.context-option');
+            if (btn) this.setContext(btn.getAttribute('data-context'));
         });
 
         // Add advanced filters event listeners
@@ -149,7 +151,7 @@ class TaskWarriorUI {
             this.tasks.unshift(task);
         }
         this.renderTasks();
-        this.showNotification(isEdit ? 'Task updated successfully' : 'Tâche ajoutée avec succès', 'success');
+        this.showNotification(isEdit ? 'Task updated successfully' : 'Task added successfully', 'success');
     }
     
     // Gestionnaire pour l'annulation
@@ -212,6 +214,39 @@ class TaskWarriorUI {
         };
         
         this.renderTasks();
+    }
+
+    async loadContexts() {
+        try {
+            const r = await fetch('/api/contexts');
+            const d = await r.json();
+            if (!d.success) return;
+
+            const container = document.getElementById('context-options');
+            container.innerHTML = '';
+
+            // "All" button always first
+            const allBtn = document.createElement('button');
+            allBtn.type = 'button';
+            allBtn.className = 'context-option' + (d.active === '' ? ' active' : '');
+            allBtn.setAttribute('data-context', '');
+            allBtn.textContent = 'All';
+            container.appendChild(allBtn);
+
+            for (const ctx of d.contexts) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'context-option' + (d.active === ctx ? ' active' : '');
+                btn.setAttribute('data-context', ctx);
+                btn.textContent = ctx.charAt(0).toUpperCase() + ctx.slice(1);
+                container.appendChild(btn);
+            }
+
+            // Reflect the active context in the filter state
+            if (d.active) this.currentContext = d.active;
+        } catch (e) {
+            console.warn('Could not load contexts:', e);
+        }
     }
 
     // Set the current context and update the UI

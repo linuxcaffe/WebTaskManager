@@ -72,7 +72,7 @@ function initializeCalendar() {
                 return `<div class="calendar-event-title">${title}</div>`;
             },
             popupSave() {
-              return 'Ajouter';
+              return 'Add';
             }
         },
         calendars: [
@@ -435,7 +435,7 @@ function loadTasks() {
                 console.log('Chargement des tâches planifiées...');
                 return fetch('/api/tasks/planned');
             } else {
-                throw new Error(data.error || 'Erreur lors du chargement des tâches');
+                throw new Error(data.error || 'Failed to load tasks');
             }
         })
         .then(response => response.json())
@@ -466,7 +466,7 @@ function loadTasks() {
         })
         .catch(error => {
             console.error('Erreur lors du chargement des tâches:', error);
-            showError('Erreur lors du chargement des tâches: ' + error.message);
+            showError('Failed to load tasks: ' + error.message);
         });
 }
 
@@ -659,13 +659,13 @@ function displayUnplannedTasks(tasks) {
     const container = document.getElementById('unplanned-tasks');
     const countEl = document.getElementById('task-count');
 
-    countEl.textContent = `${tasks.length} tâche${tasks.length > 1 ? 's' : ''}`;
+    countEl.textContent = `${tasks.length} task${tasks.length !== 1 ? 's' : ''}`;
 
     if (tasks.length === 0) {
         container.innerHTML = `
             <div class="empty-message">
                 <span class="icon">✅</span>
-                <p>Aucune tâche à planifier</p>
+                <p>No tasks to schedule</p>
             </div>
         `;
         return;
@@ -691,14 +691,13 @@ function updateTaskCount() {
     // Compter les taskCards restantes
     const remainingCards = container.querySelectorAll('.task-card').length;
 
-    countEl.textContent = `${remainingCards} tâche${remainingCards > 1 ? 's' : ''}`;
+    countEl.textContent = `${remainingCards} task${remainingCards !== 1 ? 's' : ''}`;
 
-    // Si plus aucune tâche, afficher le message "Aucune tâche à planifier"
     if (remainingCards === 0) {
         container.innerHTML = `
             <div class="empty-message">
                 <span class="icon">✅</span>
-                <p>Aucune tâche à planifier</p>
+                <p>No tasks to schedule</p>
             </div>
         `;
     }
@@ -758,7 +757,7 @@ function updateCalendarTitle() {
                 firstDayOfMonth.setMonth(firstDayOfMonth.getMonth() + 1, 1);
             }
             
-            title = firstDayOfMonth.toLocaleDateString('fr-FR', { 
+            title = firstDayOfMonth.toLocaleDateString(undefined, { 
                 month: 'long', 
                 year: 'numeric' 
             });
@@ -771,10 +770,10 @@ function updateCalendarTitle() {
                 endDate.setDate(endDate.getDate() + 6); // Ajoute 6 jours pour avoir une semaine complète
             }
             
-            title = `${startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+            title = `${startDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
         } else {
             // Vue jour
-            title = startDate.toLocaleDateString('fr-FR', { 
+            title = startDate.toLocaleDateString(undefined, { 
                 weekday: 'long', 
                 day: 'numeric', 
                 month: 'long', 

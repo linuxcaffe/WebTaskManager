@@ -16,10 +16,8 @@
                 <h1>TaskWarrior Web UI</h1>
                 <div class="context-selector">
                     <span class="context-label">Context:</span>
-                    <div class="context-options">
-                        <button type="button" class="context-option" data-context="">All</button>
-                        <button type="button" class="context-option" data-context="pro">Pro</button>
-                        <button type="button" class="context-option" data-context="perso">Perso</button>
+                    <div class="context-options" id="context-options">
+                        <!-- populated dynamically from /api/contexts -->
                     </div>
                 </div>
             </div>
@@ -30,11 +28,11 @@
                 </a>
                 <a href="day-planner.html" class="btn btn-secondary">
                     <span class="icon">📅</span>
-                    Planificateur de Journée
+                    Day Planner
                 </a>
                 <a href="calendar-planner.html" class="btn btn-secondary">
                     <span class="icon">📆</span>
-                    Calendrier
+                    Calendar
                 </a>
                 <button id="refresh-btn" class="btn btn-primary">
                     <span class="icon">🔄</span>

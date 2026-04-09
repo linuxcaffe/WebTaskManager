@@ -17,36 +17,44 @@ try:
 except ImportError:
     KANBAN_COLUMNS = ['backlog', 'todo', 'doing', 'review', 'done']
 
-def log_command(command):
+# Accepts a UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) or a plain integer task ID
+_TASK_ID_RE = re.compile(
+    r'^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d+)$',
+    re.IGNORECASE
+)
+
+def _valid_task_id(task_id):
+    return bool(_TASK_ID_RE.match(str(task_id)))
+
+def log_command(args):
     """Log the command to the debug file with a timestamp"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open(DEBUG_FILE, 'a') as f:
-        f.write(f"[{timestamp}] {command}\n")
+        f.write(f"[{timestamp}] {' '.join(args)}\n")
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
-def run_task_command(command):
-    """Execute a TaskWarrior command and return the result"""
+def run_task_command(args):
+    """Execute a TaskWarrior command and return the result.
+    args must be a list, e.g. ['task', 'status:pending', 'export'].
+    shell=True is intentionally not used.
+    """
     try:
-        # Ensure we're using the task command
-        if not command.startswith('task'):
-            command = f'task {command}'
-        
-        # Always log the command for debugging purposes
-        log_command(command)
-        
+        if args[0] != 'task':
+            args = ['task'] + args
+
+        log_command(args)
+
         if DEVELOPER_MODE:
-            # In developer mode, just log the command without executing it
             return {
                 'success': True,
-                'stdout': f'[DEV MODE] Command logged to {DEBUG_FILE}: {command}',
+                'stdout': f'[DEV MODE] Command logged to {DEBUG_FILE}: {" ".join(args)}',
                 'stderr': '',
                 'returncode': 0
             }
-        
-        # Normal execution when not in developer mode
-        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+
+        result = subprocess.run(args, capture_output=True, text=True)
         return {
             'success': result.returncode == 0,
             'stdout': result.stdout,
@@ -74,86 +82,89 @@ def static_files(filename):
 @app.route('/api/tasks/planned')
 def get_planned_tasks():
     """Get all planned tasks (with scheduled date) in JSON format"""
-    result = run_task_command('task scheduled.not: export')
-    
+    result = run_task_command(['task', 'scheduled.not:', 'export'])
+
     if result['success']:
         try:
             tasks = json.loads(result['stdout'])
-            return jsonify({
-                'success': True,
-                'data': tasks
-            })
+            return jsonify({'success': True, 'data': tasks})
         except json.JSONDecodeError as e:
             return jsonify({
                 'success': False,
-                'error': f'Erreur de décodage JSON: {str(e)}',
+                'error': f'JSON decode error: {str(e)}',
                 'stdout': result['stdout'],
                 'stderr': result['stderr']
             }), 500
     else:
         return jsonify({
             'success': False,
-            'error': 'Erreur lors de la récupération des tâches planifiées',
+            'error': 'Failed to retrieve planned tasks',
             'stderr': result['stderr']
         }), 500
 
 @app.route('/api/tasks')
 def get_tasks():
     """Get all pending tasks in JSON format"""
-    result = run_task_command('task status:pending export')
-    
+    result = run_task_command(['task', 'status:pending', 'export'])
+
     if result['success']:
         try:
             tasks = json.loads(result['stdout'])
-            # Sort tasks by urgency in descending order
             tasks.sort(key=lambda x: x.get('urgency', 0), reverse=True)
-            return jsonify({
-                'success': True,
-                'tasks': tasks
-            })
+            return jsonify({'success': True, 'tasks': tasks})
         except json.JSONDecodeError as e:
             return jsonify({
                 'success': False,
-                'error': f'Erreur de décodage JSON: {str(e)}',
+                'error': f'JSON decode error: {str(e)}',
                 'stdout': result['stdout'],
                 'stderr': result['stderr']
             }), 500
     else:
         return jsonify({
             'success': False,
-            'error': 'Erreur lors de la récupération des tâches',
+            'error': 'Failed to retrieve tasks',
             'stderr': result['stderr']
         }), 500
 
 @app.route('/api/projects')
 def get_projects():
     """Get all unique projects from TaskWarrior, including completed tasks"""
-    # Get projects from all tasks (including completed ones)
-    result = run_task_command('task _projects')
-    
+    result = run_task_command(['task', '_projects'])
+
     if result['success']:
         try:
-            # Split the output by newlines and filter out empty lines
             projects = [p.strip() for p in result['stdout'].split('\n') if p.strip()]
-            return jsonify({
-                'success': True,
-                'projects': projects
-            })
+            return jsonify({'success': True, 'projects': projects})
         except Exception as e:
             return jsonify({
                 'success': False,
                 'error': f'Failed to parse projects: {str(e)}'
             }), 500
     else:
-        return jsonify({
-            'success': False,
-            'error': result['stderr']
-        }), 500
+        return jsonify({'success': False, 'error': result['stderr']}), 500
+
+@app.route('/api/contexts')
+def get_contexts():
+    """Get all defined contexts and the currently active context"""
+    show_result = run_task_command(['task', '_show'])
+    contexts = []
+    if show_result['success']:
+        for line in show_result['stdout'].splitlines():
+            m = re.match(r'^context\.(\w+)\.read=', line)
+            if m:
+                contexts.append(m.group(1))
+
+    active_result = run_task_command(['task', '_get', 'rc.context'])
+    active = active_result['stdout'].strip() if active_result['success'] else ''
+
+    return jsonify({'success': True, 'contexts': contexts, 'active': active})
 
 @app.route('/api/task/<task_id>/start', methods=['POST'])
 def start_task(task_id):
     """Start a task"""
-    result = run_task_command(f'task {task_id} start')
+    if not _valid_task_id(task_id):
+        return jsonify({'success': False, 'message': 'Invalid task ID'}), 400
+    result = run_task_command(['task', task_id, 'start'])
     return jsonify({
         'success': result['success'],
         'message': result['stdout'] if result['success'] else result['stderr']
@@ -162,7 +173,9 @@ def start_task(task_id):
 @app.route('/api/task/<task_id>/stop', methods=['POST'])
 def stop_task(task_id):
     """Stop a task"""
-    result = run_task_command(f'task {task_id} stop')
+    if not _valid_task_id(task_id):
+        return jsonify({'success': False, 'message': 'Invalid task ID'}), 400
+    result = run_task_command(['task', task_id, 'stop'])
     return jsonify({
         'success': result['success'],
         'message': result['stdout'] if result['success'] else result['stderr']
@@ -171,7 +184,9 @@ def stop_task(task_id):
 @app.route('/api/task/<task_id>/done', methods=['POST'])
 def complete_task(task_id):
     """Mark a task as done"""
-    result = run_task_command(f'task {task_id} done')
+    if not _valid_task_id(task_id):
+        return jsonify({'success': False, 'message': 'Invalid task ID'}), 400
+    result = run_task_command(['task', task_id, 'done'])
     return jsonify({
         'success': result['success'],
         'message': result['stdout'] if result['success'] else result['stderr']
@@ -180,7 +195,9 @@ def complete_task(task_id):
 @app.route('/api/task/<task_id>/delete', methods=['DELETE'])
 def delete_task(task_id):
     """Delete a task"""
-    result = run_task_command(f'task rc.confirmation=off {task_id} delete')
+    if not _valid_task_id(task_id):
+        return jsonify({'success': False, 'message': 'Invalid task ID'}), 400
+    result = run_task_command(['task', 'rc.confirmation=off', task_id, 'delete'])
     return jsonify({
         'success': result['success'],
         'message': result['stdout'] if result['success'] else result['stderr']
@@ -189,149 +206,119 @@ def delete_task(task_id):
 @app.route('/api/task/<task_id>/modify', methods=['PUT'])
 def modify_task(task_id):
     """Modify a task"""
+    if not _valid_task_id(task_id):
+        return jsonify({'success': False, 'message': 'Invalid task ID'}), 400
+
     data = request.get_json()
     modifications = []
 
     if 'description' in data and data['description']:
-        modifications.append(f'description:"{data["description"]}"')
+        modifications.append(f'description:{data["description"]}')
 
     if 'tags' in data:
-        # First clear all existing tags, then add new ones
-        clear_result = run_task_command(f'task rc.confirmation=off {task_id} modify -TAGS')
+        clear_result = run_task_command(['task', 'rc.confirmation=off', task_id, 'modify', '-TAGS'])
         if clear_result['success'] and isinstance(data['tags'], list) and data['tags']:
-            # Add new tags
             for tag in data['tags']:
                 if tag and tag.strip():
                     modifications.append(f'+{tag.strip()}')
 
     if 'due' in data:
-        if data['due']:
-            modifications.append(f'due:"{data["due"]}"')
-        else:
-            modifications.append('due:')
+        modifications.append(f'due:{data["due"]}' if data['due'] else 'due:')
 
     if 'scheduled' in data:
-        if data['scheduled']:
-            modifications.append(f'scheduled:"{data["scheduled"]}"')
-        else:
-            modifications.append('scheduled:')
+        modifications.append(f'scheduled:{data["scheduled"]}' if data['scheduled'] else 'scheduled:')
 
     if 'priority' in data:
-        if data['priority']:
-            modifications.append(f'priority:{data["priority"]}')
-        else:
-            modifications.append('priority:')
-            
+        modifications.append(f'priority:{data["priority"]}' if data['priority'] else 'priority:')
+
     if 'project' in data:
-        if data['project']:
-            modifications.append(f'project:{data["project"]}')
-        else:
-            modifications.append('project:')
-            
+        modifications.append(f'project:{data["project"]}' if data['project'] else 'project:')
+
     if 'estTime' in data and data['estTime']:
         modifications.append(f'estTime:{data["estTime"]}')
 
     if 'state' in data:
-        if data['state']:
-            modifications.append(f'state:{data["state"]}')
-        else:
-            modifications.append('state:')
+        modifications.append(f'state:{data["state"]}' if data['state'] else 'state:')
 
     if modifications:
-        mod_string = ' '.join(modifications)
-        result = run_task_command(f'task rc.confirmation=off {task_id} modify {mod_string}')
-        
+        result = run_task_command(
+            ['task', 'rc.confirmation=off', task_id, 'modify'] + modifications
+        )
+
         if result['success']:
-            # Exporter la tâche modifiée pour obtenir les données complètes
-            export_result = run_task_command(f'task {task_id} export')
+            export_result = run_task_command(['task', task_id, 'export'])
             if export_result['success'] and export_result['stdout'].strip():
                 try:
                     task = json.loads(export_result['stdout'])
-                    if task:  # Vérifier que la liste des tâches n'est pas vide
+                    if task:
                         return jsonify({
                             'success': True,
                             'message': result['stdout'],
-                            'task': task[0]  # Prendre la première tâche
+                            'task': task[0]
                         })
                 except (json.JSONDecodeError, IndexError) as e:
                     print(f"Error parsing task data: {e}")
-                    return jsonify({
-                        'success': True,
-                        'message': result['stdout'],
-                        'task': None
-                    })
-        
+                    return jsonify({'success': True, 'message': result['stdout'], 'task': None})
+
         return jsonify({
             'success': result['success'],
             'message': result['stdout'] if result['success'] else result['stderr'],
             'task': None
         })
     else:
-        return jsonify({
-            'success': True,
-            'message': 'No changes to apply',
-            'task': None
-        })
+        return jsonify({'success': True, 'message': 'No changes to apply', 'task': None})
 
 @app.route('/api/kanban/columns')
 def get_kanban_columns():
     """Return configured kanban column names"""
     return jsonify({'success': True, 'columns': KANBAN_COLUMNS})
 
-
 @app.route('/api/task/add', methods=['POST'])
 def add_task():
     """Add a new task"""
     data = request.get_json()
-    
+
     if not data.get('description'):
-        return jsonify({
-            'success': False,
-            'error': 'Description is required'
-        }), 400
-    
-    command_parts = [f'add "{data["description"]}"']
-    
+        return jsonify({'success': False, 'error': 'Description is required'}), 400
+
+    args = ['task', 'add', data['description']]
+
     if data.get('tags'):
         if isinstance(data['tags'], list):
             for tag in data['tags']:
-                command_parts.append(f'+{tag}')
-    
+                args.append(f'+{tag}')
+
     if data.get('due'):
-        command_parts.append(f'due:{data["due"]}')
-    
+        args.append(f'due:{data["due"]}')
+
     if data.get('scheduled'):
-        command_parts.append(f'scheduled:{data["scheduled"]}')
-    
+        args.append(f'scheduled:{data["scheduled"]}')
+
     if data.get('priority'):
-        command_parts.append(f'priority:{data["priority"]}')
-    
+        args.append(f'priority:{data["priority"]}')
+
     if data.get('project'):
-        command_parts.append(f'project:{data["project"]}')
-    
+        args.append(f'project:{data["project"]}')
+
     if data.get('estTime'):
-        command_parts.append(f'estTime:{data["estTime"]}')
-    
-    # Créer la tâche sans export pour éviter que export soit inclus dans la description
-    command = f'task {" ".join(command_parts)}'
-    create_result = run_task_command(command)
-    
-    # Si la création a réussi, exporter la dernière tâche créée pour obtenir les données complètes
+        args.append(f'estTime:{data["estTime"]}')
+
+    create_result = run_task_command(args)
+
     if create_result['success']:
-        export_result = run_task_command('task +LATEST export')
+        export_result = run_task_command(['task', '+LATEST', 'export'])
         if export_result['success'] and export_result['stdout'].strip():
             try:
                 task = json.loads(export_result['stdout'])
-                if task:  # Vérifier que la liste des tâches n'est pas vide
+                if task:
                     return jsonify({
                         'success': True,
                         'message': 'Task created successfully',
-                        'task': task[0]  # Prendre la première tâche créée
+                        'task': task[0]
                     })
             except (json.JSONDecodeError, IndexError) as e:
                 print(f"Error parsing task data: {e}")
-    
-    # En cas d'erreur
+
     return jsonify({
         'success': create_result.get('success', False),
         'error': create_result.get('stderr', 'Failed to create task'),
@@ -339,14 +326,13 @@ def add_task():
     })
 
 if __name__ == '__main__':
-    # Check if TaskWarrior is installed
-    check_result = run_task_command('task version')
+    check_result = run_task_command(['task', 'version'])
     if not check_result['success']:
         print("Warning: TaskWarrior doesn't seem to be installed or accessible")
         print("Please install TaskWarrior: sudo apt-get install taskwarrior")
     else:
         print("TaskWarrior found:", check_result['stdout'].split('\n')[0])
-    
+
     print("Starting TaskWarrior Web UI...")
     print("Access the interface at: http://localhost:5000")
     app.run(host='0.0.0.0', port=5000, debug=True)

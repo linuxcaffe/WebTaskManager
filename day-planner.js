@@ -13,7 +13,7 @@ class DayPlanner {
         this.taskEditor = new TaskEditor({
             showAllFields: true, // Afficher tous les champs comme dans index.html
             priorityFormat: 'words', // high/medium/low
-            language: 'fr',
+            language: 'en',
             modalId: 'day-planner-task-editor',
             onSave: (taskData, isEdit) => this.handleTaskSave(taskData, isEdit),
             onCancel: () => this.handleTaskCancel()
@@ -23,7 +23,7 @@ class DayPlanner {
         this.taskCreator = new TaskEditor({
             showAllFields: true, // Afficher tous les champs
             priorityFormat: 'words', // high/medium/low
-            language: 'fr',
+            language: 'en',
             modalId: 'day-planner-task-creator-modal',
             inline: false, // Mode modal
             onSave: (taskData) => this.handleTaskCreate(taskData),
@@ -135,7 +135,7 @@ class DayPlanner {
             month: 'long', 
             day: 'numeric' 
         };
-        dateDisplay.textContent = today.toLocaleDateString('fr-FR', options);
+        dateDisplay.textContent = today.toLocaleDateString(undefined, options);
     }
 
     openTaskModal(task = null) {
@@ -244,7 +244,7 @@ class DayPlanner {
         this.closeTaskCreatorModal();
         
         // Afficher une notification de succès
-        this.showNotification('Tâche ajoutée avec succès !', 'success');
+        this.showNotification('Task added successfully!', 'success');
     }
     
     // Gestionnaire pour l'annulation
@@ -257,7 +257,7 @@ class DayPlanner {
         container.innerHTML = '';
 
         if (this.tasks.length === 0) {
-            container.innerHTML = '<div class="loading">Aucune tâche à planifier</div>';
+            container.innerHTML = '<div class="loading">No tasks to schedule</div>';
             return;
         }
 
@@ -327,7 +327,7 @@ class DayPlanner {
         
         // Vérifier les conflits
         if (this.hasTimeConflict(hour, minute, task.duration)) {
-            alert('Ce créneau horaire est déjà occupé ou se chevauche avec une autre tâche.');
+            alert('This time slot is already occupied or overlaps with another task.');
             return;
         }
 
@@ -386,8 +386,8 @@ class DayPlanner {
             <div class="scheduled-task-title">${task.title}</div>
             <div class="scheduled-task-duration">${task.duration} min</div>
             <div class="scheduled-task-actions">
-                <button class="task-action-btn unschedule-task" title="Déplanifier">↩️</button>
-                <button class="task-action-btn delete-scheduled-task" title="Supprimer">🗑️</button>
+                <button class="task-action-btn unschedule-task" title="Unschedule">↩️</button>
+                <button class="task-action-btn delete-scheduled-task" title="Delete">🗑️</button>
             </div>
         `;
 
@@ -503,7 +503,7 @@ class DayPlanner {
     }
 
     deleteTask(taskId) {
-        if (confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) {
+        if (confirm('Delete this task?')) {
             this.tasks = this.tasks.filter(t => t.id !== taskId);
             this.saveTasks();
             this.renderTasks();
@@ -511,7 +511,7 @@ class DayPlanner {
     }
 
     deleteScheduledTask(taskId) {
-        if (confirm('Êtes-vous sûr de vouloir supprimer cette tâche planifiée ?')) {
+        if (confirm('Remove this scheduled task?')) {
             this.scheduledTasks = this.scheduledTasks.filter(t => t.id !== taskId);
             this.saveTasks();
             this.renderScheduledTasks();
@@ -557,7 +557,7 @@ class DayPlanner {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        this.showNotification('Planification sauvegardée avec succès !', 'success');
+        this.showNotification('Schedule saved successfully!', 'success');
     }
 
     resetPlanner() {
@@ -567,7 +567,7 @@ class DayPlanner {
             this.saveTasks();
             this.renderTasks();
             this.renderScheduledTasks();
-            this.showNotification('Planification réinitialisée', 'info');
+            this.showNotification('Schedule reset', 'info');
         }
     }
 

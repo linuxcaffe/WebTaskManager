@@ -253,7 +253,7 @@ class TaskCardManager {
                 try {
                     const date = new Date(task.due);
                     if (!isNaN(date.getTime())) {
-                        dueDate = date.toLocaleDateString('fr-FR');
+                        dueDate = date.toLocaleDateString();
                     }
                 } catch (e) {
                     console.error('Format de date invalide pour la tâche:', task);

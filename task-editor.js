@@ -9,7 +9,7 @@ class TaskEditor {
             // Configuration par défaut
             showAllFields: true,
             priorityFormat: 'letters', // 'letters' (H/M/L) ou 'words' (high/medium/low)
-            language: 'fr', // 'fr' ou 'en'
+            language: 'en', // 'en' or 'fr'
             modalId: 'task-editor-modal',
             inline: false, // Mode inline ou modal
             containerId: null, // ID du conteneur pour le mode inline
