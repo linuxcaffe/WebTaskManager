@@ -43,6 +43,9 @@ def run_task_command(args):
     try:
         if args[0] != 'task':
             args = ['task'] + args
+        # Never trigger TW's recurrence engine from the web UI — it can fail
+        # on tasks managed by the recurrence-overhaul-hook (no built-in recur field)
+        args.insert(1, 'rc.recurrence=no')
 
         log_command(args)
 
@@ -102,10 +105,49 @@ def get_planned_tasks():
             'stderr': result['stderr']
         }), 500
 
+def _build_task_filter(statuses, filter_text):
+    """Build a TW filter argument list from status ids and optional filter text.
+    Multiple statuses are OR'd; filter text is AND'd with the status block.
+    Returns a list of args to insert before 'export'.
+    """
+    STATUS_MAP = {
+        'pending':   'status:pending',
+        'waiting':   'status:waiting',
+        'completed': 'status:completed',
+        'deleted':   'status:deleted',
+        'recurring': '+RECURRING',
+    }
+    parts = [STATUS_MAP[s] for s in statuses if s in STATUS_MAP]
+    if not parts:
+        parts = ['status:pending']
+
+    if len(parts) == 1:
+        args = parts
+    else:
+        args = ['('] + [p for pair in zip(parts, ['or'] * len(parts)) for p in pair][:-1] + [')']
+
+    if filter_text:
+        args.append(f'description.contains:{filter_text}')
+
+    return args
+
+
 @app.route('/api/tasks')
 def get_tasks():
-    """Get all pending tasks in JSON format"""
-    result = run_task_command(['task', 'status:pending', 'export'])
+    """Get all pending tasks in JSON format.
+    Query params: status (comma-separated), filter (text), context (name).
+    """
+    statuses    = [s.strip() for s in request.args.get('status', 'pending').split(',') if s.strip()]
+    filter_text = request.args.get('filter', '').strip()
+    context     = request.args.get('context', '').strip()
+
+    args = ['task']
+    if context:
+        args.append(f'rc.context={context}')
+    args += _build_task_filter(statuses, filter_text)
+    args.append('export')
+
+    result = run_task_command(args)
 
     if result['success']:
         try:

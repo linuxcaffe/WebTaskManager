@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TaskWarrior Kanban</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="/nav.js"></script>
     <style>
         /* kanban needs full viewport width — override the global container cap */
         .container {
@@ -123,9 +124,6 @@
             <div class="status-line" id="status-bar">Loading...</div>
         </div>
         <div class="header-actions">
-            <a href="/" class="btn btn-secondary">Task List</a>
-            <a href="day-planner.html" class="btn btn-secondary">Day Planner</a>
-            <a href="calendar-planner.html" class="btn btn-secondary">Calendar</a>
             <button id="refresh-btn" class="btn btn-primary">Refresh</button>
         </div>
     </header>
@@ -154,7 +152,8 @@ async function loadColumns() {
 }
 
 async function loadTasks() {
-    const r = await fetch('/api/tasks');
+    const params = window.twNav ? window.twNav.stateToParams() : 'status=pending';
+    const r = await fetch('/api/tasks?' + params);
     const d = await r.json();
     tasks = d.tasks || [];
 }
@@ -297,6 +296,7 @@ async function init() {
 }
 
 document.getElementById('refresh-btn').addEventListener('click', init);
+document.addEventListener('tw-filter-change', init);
 init();
 </script>
 </body>

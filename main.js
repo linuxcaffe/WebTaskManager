@@ -4,12 +4,7 @@ class TaskWarriorUI {
     constructor() {
         this.tasks = [];
         this.currentEditingTask = null;
-        this.currentContext = ''; // 'pro', 'perso', or '' for all
-        this.currentFilters = {
-            project: null,
-            tags: []
-        };
-        this.projects = new Set(); // Pour stocker la liste des projets uniques
+        this.projects = new Set();
         
         // Initialiser le composant TaskEditor
         this.taskEditor = new TaskEditor({
@@ -21,65 +16,24 @@ class TaskWarriorUI {
             onCancel: () => this.handleTaskCancel()
         });
         
-        // Initialiser le composant TaskEditor en mode inline
-        this.taskCreator = new TaskEditor({
-            showAllFields: true,
-            priorityFormat: 'letters',
-            language: 'en',
-            containerId: 'task-creator-container',
-            inline: true,
-            onSaveSuccess: (task, isEdit) => {
-                if (!isEdit) {
-                    this.tasks.unshift(task);
-                    this.renderTasks();
-                    this.showNotification('Task added successfully', 'success');
-                }
-            },
-            onSaveError: (error) => {
-                this.showNotification(error || 'Failed to add task', 'error');
-            }
-        });
-        
         // Wait for components to initialise before loading data
         setTimeout(() => {
             this.initializeEventListeners();
-            this.loadContexts();
             this.loadTasks();
             this.updateProjectSuggestions();
         }, 100);
+
+        // Re-fetch on server-relevant changes; re-filter only for project/tags
+        document.addEventListener('tw-filter-change', (e) => {
+            if (e.detail && e.detail.clientOnly) {
+                this.renderTasks();
+            } else {
+                this.loadTasks();
+            }
+        });
     }
 
     initializeEventListeners() {
-        document.getElementById('refresh-btn').addEventListener('click', () => this.loadTasks());
-        
-        // Context buttons are added dynamically — delegate to the container
-        document.getElementById('context-options').addEventListener('click', (e) => {
-            const btn = e.target.closest('.context-option');
-            if (btn) this.setContext(btn.getAttribute('data-context'));
-        });
-
-        // Add advanced filters event listeners
-        document.getElementById('apply-filters').addEventListener('click', () => this.applyFilters());
-        document.getElementById('clear-filters').addEventListener('click', () => this.clearFilters());
-        
-        // Apply filters on Enter key in filter inputs
-        const projectInput = document.getElementById('filter-project');
-        const tagsInput = document.getElementById('filter-tags');
-        
-        // Update project suggestions as user types
-        projectInput.addEventListener('input', (e) => {
-            this.updateProjectSuggestions(e.target.value);
-        });
-        
-        // Apply filters on Enter
-        [projectInput, tagsInput].forEach(input => {
-            input.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    this.applyFilters();
-                }
-            });
-        });
     }
 
 
@@ -89,9 +43,9 @@ class TaskWarriorUI {
             this.showLoading(true);
             this.hideError();
 
-            // Load tasks and projects in parallel
+            const params = window.twNav ? window.twNav.stateToParams() : 'status=pending';
             const [tasksResponse, projectsResponse] = await Promise.all([
-                fetch('/api/tasks'),
+                fetch('/api/tasks?' + params),
                 fetch('/api/projects')
             ]);
 
@@ -161,110 +115,17 @@ class TaskWarriorUI {
     
 
 
-    // Filter tasks based on current context and advanced filters
+    // Filter tasks client-side using project/tags from nav state
     getFilteredTasks() {
+        const state = window.twNav ? window.twNav.getState() : {};
+        const project = (state.project || '').trim().toLowerCase();
+        const tags = (state.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+
         return this.tasks.filter(task => {
-            // Filter by context (pro/perso)
-            if (this.currentContext) {
-                if (!task.tags || !task.tags.includes(this.currentContext)) {
-                    return false;
-                }
-            }
-            
-            // Filter by project
-            if (this.currentFilters.project && task.project !== this.currentFilters.project) {
-                return false;
-            }
-            
-            // Filter by tags
-            if (this.currentFilters.tags && this.currentFilters.tags.length > 0) {
-                if (!task.tags || !this.currentFilters.tags.every(tag => task.tags.includes(tag))) {
-                    return false;
-                }
-            }
-            
+            if (project && (task.project || '').toLowerCase() !== project) return false;
+            if (tags.length > 0 && !tags.every(t => (task.tags || []).includes(t))) return false;
             return true;
         });
-    }
-    
-    // Apply advanced filters
-    applyFilters() {
-        const project = document.getElementById('filter-project').value.trim();
-        const tags = document.getElementById('filter-tags').value
-            .split(',')
-            .map(tag => tag.trim())
-            .filter(tag => tag.length > 0);
-            
-        this.currentFilters = {
-            project: project || null,
-            tags: tags
-        };
-        
-        this.renderTasks();
-    }
-    
-    // Clear all filters
-    clearFilters() {
-        document.getElementById('filter-project').value = '';
-        document.getElementById('filter-tags').value = '';
-        
-        this.currentFilters = {
-            project: null,
-            tags: []
-        };
-        
-        this.renderTasks();
-    }
-
-    async loadContexts() {
-        try {
-            const r = await fetch('/api/contexts');
-            const d = await r.json();
-            if (!d.success) return;
-
-            const container = document.getElementById('context-options');
-            container.innerHTML = '';
-
-            // "All" button always first
-            const allBtn = document.createElement('button');
-            allBtn.type = 'button';
-            allBtn.className = 'context-option' + (d.active === '' ? ' active' : '');
-            allBtn.setAttribute('data-context', '');
-            allBtn.textContent = 'All';
-            container.appendChild(allBtn);
-
-            for (const ctx of d.contexts) {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'context-option' + (d.active === ctx ? ' active' : '');
-                btn.setAttribute('data-context', ctx);
-                btn.textContent = ctx.charAt(0).toUpperCase() + ctx.slice(1);
-                container.appendChild(btn);
-            }
-
-            // Reflect the active context in the filter state
-            if (d.active) this.currentContext = d.active;
-        } catch (e) {
-            console.warn('Could not load contexts:', e);
-        }
-    }
-
-    // Set the current context and update the UI
-    setContext(context) {
-        this.currentContext = context;
-        
-        // Update active state of context buttons
-        document.querySelectorAll('.context-option').forEach(button => {
-            if (button.getAttribute('data-context') === context) {
-                button.classList.add('active');
-            } else {
-                button.classList.remove('active');
-            }
-        });
-        
-        // Re-render tasks with the new filter
-        this.updateProjectsList();
-        this.renderTasks();
     }
 
     updateProjectsList() {
@@ -302,18 +163,25 @@ class TaskWarriorUI {
     renderTasks() {
         const container = document.getElementById('tasks-container');
         if (!container) return;
-        
+
+        // Dynamic heading: "N <Status> Tasks"
+        const heading = document.getElementById('tasks-heading');
+        if (heading) {
+            const state = window.twNav ? window.twNav.getState() : { statuses: ['pending'] };
+            const status = state.statuses[0] || 'pending';
+            const label = status.charAt(0).toUpperCase() + status.slice(1);
+            heading.textContent = `${this.tasks.length} ${label} Tasks`;
+        }
+
         // Update projects list whenever tasks are rendered
         this.updateProjectsList();
-        
+
         const filteredTasks = this.getFilteredTasks();
-        
+
+        if (window.twNav) window.twNav.setCount(filteredTasks.length, this.tasks.length);
+
         if (filteredTasks.length === 0) {
-            container.innerHTML = '<div class="no-tasks">No tasks found' + 
-                (this.currentContext ? ` in context "${this.currentContext}"` : '') + 
-                (this.currentFilters.project ? ` for project "${this.currentFilters.project}"` : '') + 
-                (this.currentFilters.tags.length > 0 ? ` with tags: ${this.currentFilters.tags.join(', ')}` : '') + 
-                '</div>';
+            container.innerHTML = '<div class="no-tasks">No tasks found</div>';
             return;
         }
         
