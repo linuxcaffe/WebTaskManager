@@ -10,6 +10,7 @@ import subprocess
 import json
 import os
 import re
+import time
 from datetime import datetime
 from config import DEVELOPER_MODE, DEBUG_FILE
 try:
@@ -25,6 +26,25 @@ _TASK_ID_RE = re.compile(
 
 def _valid_task_id(task_id):
     return bool(_TASK_ID_RE.match(str(task_id)))
+
+# Context filter cache — avoids mutating rc.context on every request
+_ctx_cache: dict = {}
+_ctx_cache_ts: float = 0.0
+
+def _get_context_filters() -> dict:
+    """Return {name: read_filter_string} for all defined contexts, cached 30s."""
+    global _ctx_cache, _ctx_cache_ts
+    if time.time() - _ctx_cache_ts < 30:
+        return _ctx_cache
+    result = run_task_command(['task', '_show'])
+    filters = {}
+    if result['success']:
+        for line in result['stdout'].splitlines():
+            m = re.match(r'^context\.(.+?)\.read=(.+)$', line)
+            if m:
+                filters[m.group(1)] = m.group(2)
+    _ctx_cache, _ctx_cache_ts = filters, time.time()
+    return filters
 
 def log_command(args):
     """Log the command to the debug file with a timestamp"""
@@ -138,12 +158,18 @@ def get_tasks():
     Query params: status (comma-separated), filter (text), context (name).
     """
     statuses    = [s.strip() for s in request.args.get('status', 'pending').split(',') if s.strip()]
-    filter_text = request.args.get('filter', '').strip()
+    # Sanitise filter text: keep only alphanumeric, spaces, and common safe chars
+    raw_filter  = request.args.get('filter', '').strip()
+    filter_text = re.sub(r'[^\w\s\-\.]', '', raw_filter)[:80]
     context     = request.args.get('context', '').strip()
 
     args = ['task']
+    # Apply context as an inline filter (no rc.context= so TW state is never mutated)
     if context:
-        args.append(f'rc.context={context}')
+        ctx_filters = _get_context_filters()
+        ctx_expr = ctx_filters.get(context)
+        if ctx_expr:
+            args += ['(', ctx_expr, ')']
     args += _build_task_filter(statuses, filter_text)
     args.append('export')
 
@@ -153,7 +179,8 @@ def get_tasks():
         try:
             tasks = json.loads(result['stdout'])
             tasks.sort(key=lambda x: x.get('urgency', 0), reverse=True)
-            return jsonify({'success': True, 'tasks': tasks})
+            warnings = [l for l in result['stderr'].splitlines() if l.strip()]
+            return jsonify({'success': True, 'tasks': tasks, 'warnings': warnings})
         except json.JSONDecodeError as e:
             return jsonify({
                 'success': False,
@@ -187,19 +214,15 @@ def get_projects():
 
 @app.route('/api/contexts')
 def get_contexts():
-    """Get all defined contexts and the currently active context"""
-    show_result = run_task_command(['task', '_show'])
-    contexts = []
-    if show_result['success']:
-        for line in show_result['stdout'].splitlines():
-            m = re.match(r'^context\.(\w+)\.read=', line)
-            if m:
-                contexts.append(m.group(1))
+    """Get all defined contexts, their filter definitions, and the active context."""
+    filters = _get_context_filters()
+    # Exclude cmx composite contexts (contain ':') — they're internal plumbing
+    contexts = [k for k in filters if ':' not in k]
 
     active_result = run_task_command(['task', '_get', 'rc.context'])
     active = active_result['stdout'].strip() if active_result['success'] else ''
 
-    return jsonify({'success': True, 'contexts': contexts, 'active': active})
+    return jsonify({'success': True, 'contexts': contexts, 'filters': filters, 'active': active})
 
 @app.route('/api/task/<task_id>/start', methods=['POST'])
 def start_task(task_id):
@@ -258,8 +281,9 @@ def modify_task(task_id):
         modifications.append(f'description:{data["description"]}')
 
     if 'tags' in data:
-        clear_result = run_task_command(['task', 'rc.confirmation=off', task_id, 'modify', '-TAGS'])
-        if clear_result['success'] and isinstance(data['tags'], list) and data['tags']:
+        # Clear all existing tags atomically in the same modify command
+        modifications.append('-TAGS')
+        if isinstance(data['tags'], list):
             for tag in data['tags']:
                 if tag and tag.strip():
                     modifications.append(f'+{tag.strip()}')

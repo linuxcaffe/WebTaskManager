@@ -16,6 +16,8 @@ class TaskWarriorUI {
             onCancel: () => this.handleTaskCancel()
         });
         
+        this.viewMode = localStorage.getItem('tw-view-mode') || 'card';
+
         // Wait for components to initialise before loading data
         setTimeout(() => {
             this.initializeEventListeners();
@@ -34,6 +36,20 @@ class TaskWarriorUI {
     }
 
     initializeEventListeners() {
+        const cardBtn = document.getElementById('view-card');
+        const listBtn = document.getElementById('view-list');
+        if (cardBtn && listBtn) {
+            const setView = (mode) => {
+                this.viewMode = mode;
+                localStorage.setItem('tw-view-mode', mode);
+                cardBtn.classList.toggle('active', mode === 'card');
+                listBtn.classList.toggle('active', mode === 'list');
+                document.getElementById('tasks-container').classList.toggle('list-view', mode === 'list');
+            };
+            setView(this.viewMode);
+            cardBtn.addEventListener('click', () => setView('card'));
+            listBtn.addEventListener('click', () => setView('list'));
+        }
     }
 
 
@@ -180,6 +196,18 @@ class TaskWarriorUI {
 
         if (window.twNav) window.twNav.setCount(filteredTasks.length, this.tasks.length);
 
+        // Filter badge: show active text filter
+        const badge = document.getElementById('filter-badge');
+        if (badge) {
+            const f = window.twNav ? window.twNav.getState().filter : '';
+            badge.textContent = f ? `"${f}"` : '';
+            badge.classList.toggle('visible', !!f);
+        }
+
+        // Preserve view mode class on re-render
+        const tc = document.getElementById('tasks-container');
+        if (tc && this.viewMode === 'list') tc.classList.add('list-view');
+
         if (filteredTasks.length === 0) {
             container.innerHTML = '<div class="no-tasks">No tasks found</div>';
             return;
@@ -190,7 +218,7 @@ class TaskWarriorUI {
         
         // Crée et ajoute chaque carte de tâche
         filteredTasks.forEach(task => {
-            const taskCard = taskCardManager.createTaskCard(task, 'full');
+            const taskCard = taskCardManager.createTaskCard(task);
             container.appendChild(taskCard);
         });
     }

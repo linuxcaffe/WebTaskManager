@@ -13,7 +13,14 @@
 <body>
     <div class="container">
         <div class="tasks-section">
-            <h2 id="tasks-heading">Tasks</h2>
+            <div class="list-header">
+                <h2 id="tasks-heading">Tasks</h2>
+                <div class="list-header-right">
+                    <span id="filter-badge" class="filter-badge"></span>
+                    <button id="view-card" class="view-btn active" title="Card view">⊞</button>
+                    <button id="view-list" class="view-btn"        title="List view">≡</button>
+                </div>
+            </div>
             <div id="loading" class="loading">Loading tasks...</div>
             <div id="error-message" class="error-message" style="display: none;"></div>
             <div id="tasks-container"></div>
