@@ -3,6 +3,7 @@
 class TaskWarriorUI {
     constructor() {
         this.tasks = [];
+        this.serverTotal = null;
         this.currentEditingTask = null;
         this.projects = new Set();
         
@@ -33,6 +34,11 @@ class TaskWarriorUI {
                 this.loadTasks();
             }
         });
+
+        // Add button (nav) → open TaskEditor as a dialog
+        document.addEventListener('tw-open-add', () => {
+            if (typeof taskEditor !== 'undefined') taskEditor.show();
+        });
     }
 
     initializeEventListeners() {
@@ -44,11 +50,31 @@ class TaskWarriorUI {
                 localStorage.setItem('tw-view-mode', mode);
                 cardBtn.classList.toggle('active', mode === 'card');
                 listBtn.classList.toggle('active', mode === 'list');
-                document.getElementById('tasks-container').classList.toggle('list-view', mode === 'list');
+                const tc = document.getElementById('tasks-container');
+                tc.classList.toggle('list-view', mode === 'list');
+                if (mode === 'list') {
+                    tc.querySelectorAll('.task-card.expanded').forEach(c => c.classList.remove('expanded'));
+                    tc.querySelectorAll('.task-card.collapsed').forEach(c => c.classList.remove('collapsed'));
+                }
             };
             setView(this.viewMode);
             cardBtn.addEventListener('click', () => setView('card'));
             listBtn.addEventListener('click', () => setView('list'));
+        }
+
+        // Single-click anywhere on a card (not an action button) to expand/collapse
+        const container = document.getElementById('tasks-container');
+        if (container) {
+            container.addEventListener('click', (e) => {
+                if (e.target.closest('[data-task-action]')) return;
+                const card = e.target.closest('.task-card');
+                if (!card) return;
+                if (this.viewMode === 'list') {
+                    card.classList.toggle('expanded');
+                } else {
+                    card.classList.toggle('collapsed');
+                }
+            });
         }
     }
 
@@ -59,18 +85,29 @@ class TaskWarriorUI {
             this.showLoading(true);
             this.hideError();
 
+            const state  = window.twNav ? window.twNav.getState() : {};
             const params = window.twNav ? window.twNav.stateToParams() : 'status=pending';
-            const [tasksResponse, projectsResponse] = await Promise.all([
-                fetch('/api/tasks?' + params),
-                fetch('/api/projects')
-            ]);
 
-            const tasksData = await tasksResponse.json();
-            const projectsData = await projectsResponse.json();
+            // When a context is active, also fetch the unfiltered status total so the
+            // denominator in filtered/total reflects all tasks in this status.
+            const statusParams = new URLSearchParams();
+            statusParams.set('status', (state.statuses || ['pending']).join(','));
+            const needTotal = !!(state.context);
+
+            const fetches = [
+                fetch('/api/tasks?' + params).then(r => r.json()),
+                needTotal ? fetch('/api/tasks?' + statusParams).then(r => r.json()) : Promise.resolve(null),
+                fetch('/api/projects').then(r => r.json()),
+            ];
+            const [tasksData, totalData, projectsData] = await Promise.all(fetches);
 
             if (tasksData.success) {
                 this.tasks = tasksData.tasks;
+                this.serverTotal = totalData && totalData.success ? totalData.tasks.length : this.tasks.length;
                 this.renderTasks();
+                if (tasksData.warnings && tasksData.warnings.length > 0) {
+                    this.showNotification(tasksData.warnings.join(' | '), 'warning');
+                }
             } else {
                 this.showError(tasksData.error || 'Failed to load tasks');
             }
@@ -134,11 +171,13 @@ class TaskWarriorUI {
     // Filter tasks client-side using project/tags from nav state
     getFilteredTasks() {
         const state = window.twNav ? window.twNav.getState() : {};
+        const filter  = (state.filter  || '').trim().toLowerCase();
         const project = (state.project || '').trim().toLowerCase();
-        const tags = (state.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+        const tags    = (state.tags    || '').split(',').map(t => t.trim()).filter(Boolean);
 
         return this.tasks.filter(task => {
-            if (project && (task.project || '').toLowerCase() !== project) return false;
+            if (filter  && !(task.description || '').toLowerCase().includes(filter)) return false;
+            if (project && !(task.project     || '').toLowerCase().includes(project)) return false;
             if (tags.length > 0 && !tags.every(t => (task.tags || []).includes(t))) return false;
             return true;
         });
@@ -194,7 +233,7 @@ class TaskWarriorUI {
 
         const filteredTasks = this.getFilteredTasks();
 
-        if (window.twNav) window.twNav.setCount(filteredTasks.length, this.tasks.length);
+        if (window.twNav) window.twNav.setCount(filteredTasks.length, this.serverTotal != null ? this.serverTotal : this.tasks.length);
 
         // Filter badge: show active text filter
         const badge = document.getElementById('filter-badge');

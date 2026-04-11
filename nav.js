@@ -21,7 +21,8 @@
     'use strict';
 
     // ── Config ────────────────────────────────────────────────────────────────
-    const BREAK     = 640;          // px — stack bars below this width
+    const BREAK     = 860;          // px — stack bars below this width
+    const NARROW    = 400;          // px — shorten brand name below this width
     const STATE_KEY = 'tw-nav-state';
     const DEBOUNCE  = 400;          // ms — filter input debounce
 
@@ -30,7 +31,6 @@
         { id: 'kanban',   href: '/kanban.html',           label: 'Kanban' },
         { id: 'planner',  href: '/day-planner.html',      label: 'Day Planner' },
         { id: 'calendar', href: '/calendar-planner.html', label: 'Calendar' },
-        { id: 'add',      href: '/add.html',              label: 'Add' },
     ];
 
     const STATUS_BTNS = [
@@ -63,8 +63,8 @@
         state = state || getState();
         const p = new URLSearchParams();
         if (state.statuses && state.statuses.length) p.set('status', state.statuses.join(','));
-        if (state.filter)  p.set('filter',  state.filter);
         if (state.context) p.set('context', state.context);
+        // filter/project/tags are applied client-side; total stays rock-solid
         return p.toString();
     }
 
@@ -82,7 +82,6 @@
         if (p.endsWith('kanban.html'))           return 'kanban';
         if (p.endsWith('day-planner.html'))      return 'planner';
         if (p.endsWith('calendar-planner.html')) return 'calendar';
-        if (p.endsWith('add.html'))              return 'add';
         return 'tasks';
     }
 
@@ -95,13 +94,13 @@
     justify-content: space-between;
     align-items: center;
     height: 50px;
-    padding: 0 14px;
+    padding: 0 14px 0 0;
     background: #1a1a1a;
     position: sticky;
     top: 0;
     z-index: 9999;
     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-    gap: 12px;
+    gap: 8px;
     box-sizing: border-box;
 }
 #tw-btn-bar {
@@ -115,18 +114,21 @@
     box-sizing: border-box;
 }
 .tw-bar-left  { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
-.tw-bar-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.tw-bar-right { display: flex; align-items: center; gap: 4px; flex-shrink: 1; }
 
-/* brand */
-.tw-brand {
-    display: flex; align-items: center; gap: 7px;
-    text-decoration: none; color: #fff; font-weight: 600; font-size: 20px;
-    white-space: nowrap; opacity: 0.9; flex-shrink: 0; margin-right: 6px;
-    cursor: pointer; background: none; border: none; padding: 0;
-    height: 50px;
+/* logo (refresh button) + brand name (about link) */
+.tw-logo-btn {
+    background: none; border: none; cursor: pointer; padding: 0;
+    flex-shrink: 0; display: flex; align-items: center;
 }
-.tw-brand:hover { opacity: 1; }
-.tw-logo { height: 46px; width: 46px; display: block; }
+.tw-logo-btn:hover { opacity: 0.85; }
+.tw-logo { height: 50px; width: 50px; display: block; }
+.tw-brand-name {
+    text-decoration: none; color: #fff; font-weight: 600; font-size: 18px;
+    white-space: nowrap; opacity: 0.9; flex-shrink: 0; margin-right: 4px;
+}
+.tw-brand-name:hover { opacity: 1; color: #fff; }
+.tw-name-short { display: none; }
 
 /* nav links */
 .tw-nav-link {
@@ -147,9 +149,9 @@
     color: #fff; font-size: 14px; padding: 5px 0;
 }
 .tw-filter-wrap input::placeholder { color: rgba(255,255,255,0.35); }
-#tw-filter-input  { width: 100px; }
-#tw-project-input { width: 80px; }
-#tw-tags-input    { width: 70px; }
+#tw-filter-input  { width: 130px; min-width: 40px; }
+#tw-project-input { width: 110px; min-width: 40px; }
+#tw-tags-input    { width: 90px;  min-width: 40px; }
 .tw-inp-clear {
     background: none; border: none; color: rgba(255,255,255,0.45);
     cursor: pointer; font-size: 16px; padding: 0 1px; line-height: 1;
@@ -160,7 +162,7 @@
 
 /* task count */
 .tw-count {
-    color: rgba(255,255,255,0.55); font-size: 13px; white-space: nowrap; min-width: 36px; text-align: right;
+    color: rgba(255,255,255,0.7); font-size: 18px; white-space: nowrap; min-width: 44px; text-align: right; font-weight: 500;
 }
 
 /* add button */
@@ -187,8 +189,14 @@
     #tw-nav-bar, #tw-btn-bar {
         height: auto; flex-wrap: wrap; padding: 5px 10px; gap: 4px;
     }
-    .tw-bar-left, .tw-bar-right { flex-wrap: wrap; width: 100%; justify-content: flex-start; }
-    #tw-filter-input, #tw-project-input, #tw-tags-input { width: 80px; }
+    .tw-bar-left  { flex-wrap: wrap; width: 100%; justify-content: flex-start; }
+    .tw-bar-right { flex-wrap: wrap; width: 100%; justify-content: flex-end; }
+    #tw-filter-input, #tw-project-input, #tw-tags-input { width: 80px; min-width: 30px; }
+}
+/* minimum width — shorten brand name */
+@media (max-width: ${NARROW}px) {
+    .tw-name-full { display: none; }
+    .tw-name-short { display: inline; }
 }
 `;
 
@@ -200,10 +208,13 @@
 
         return (
             `<div class="tw-bar-left">` +
-                `<button id="tw-logo-refresh" class="tw-brand">` +
-                    `<img src="/logo.svg" alt="" class="tw-logo">` +
-                    `<span>Taskwarrior</span>` +
+                `<button id="tw-logo-refresh" class="tw-logo-btn" title="Refresh">` +
+                    `<img src="/logo.svg" alt="Taskwarrior" class="tw-logo">` +
                 `</button>` +
+                `<a href="/about.html" class="tw-brand-name">` +
+                    `<span class="tw-name-full">Taskwarrior</span>` +
+                    `<span class="tw-name-short">Task</span>` +
+                `</a>` +
                 links +
             `</div>` +
             `<div class="tw-bar-right">` +
@@ -225,13 +236,16 @@
         );
     }
 
-    function buildBtnBar(state, contexts) {
-        const ctxBtns = [
+    function buildCtxBtns(state, contexts) {
+        return [
             `<button class="tw-ctx-btn${!state.context ? ' active' : ''}" data-ctx="">All</button>`,
             ...contexts.map(c =>
-                `<button class="tw-ctx-btn${state.context === c ? ' active' : ''}" data-ctx="${c}">${cap(c)}</button>`
-            )
+                `<button class="tw-ctx-btn${state.context === c ? ' active' : ''}" data-ctx="${c}">${cap(c)}</button>`)
         ].join('');
+    }
+
+    function buildBtnBar(state, contexts) {
+        const ctxBtns = buildCtxBtns(state, contexts);
 
         const statusBtns = STATUS_BTNS.map(s =>
             `<button class="tw-status-btn${state.statuses.includes(s.id) ? ' active' : ''}" data-status="${s.id}">${s.label}</button>`
@@ -283,7 +297,7 @@
             });
         }
 
-        wireInput('tw-filter-input',  'tw-filter-clear',  'filter',  false);
+        wireInput('tw-filter-input',  'tw-filter-clear',  'filter',  true);
         wireInput('tw-project-input', 'tw-project-clear', 'project', true);
         wireInput('tw-tags-input',    'tw-tags-clear',    'tags',    true);
 
@@ -291,7 +305,7 @@
             document.dispatchEvent(new CustomEvent('tw-filter-change', { detail: getState() })));
 
         document.getElementById('tw-add-btn').addEventListener('click', () =>
-            window.location.href = '/add.html');
+            document.dispatchEvent(new CustomEvent('tw-open-add')));
 
         document.getElementById('tw-ctx-btns').addEventListener('click', e => {
             const b = e.target.closest('.tw-ctx-btn');
@@ -305,15 +319,25 @@
         });
     }
 
+    // ── Context cache (sessionStorage) ───────────────────────────────────────
+    const CTX_KEY = 'tw-contexts';
+    function getCachedContexts() {
+        try { return JSON.parse(sessionStorage.getItem(CTX_KEY)) || []; }
+        catch { return []; }
+    }
+    function setCachedContexts(list) {
+        try { sessionStorage.setItem(CTX_KEY, JSON.stringify(list)); } catch {}
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────────
-    async function init() {
+    function init() {
         const style = document.createElement('style');
         style.textContent = CSS;
         document.head.appendChild(style);
 
         const state    = getState();
         const active   = activePage();
-        const contexts = await fetchContexts();
+        const contexts = getCachedContexts();   // instant — no API wait
 
         const navBar = document.createElement('div');
         navBar.id = 'tw-nav-bar';
@@ -327,10 +351,18 @@
         document.body.insertBefore(btnBar, document.body.firstChild);
         document.body.insertBefore(navBar, document.body.firstChild);
 
-        // restore filter inputs from saved state
         _applyState(state);
-
         bindEvents();
+
+        // Refresh contexts in background — update buttons silently if the list changed
+        fetchContexts().then(fresh => {
+            setCachedContexts(fresh);
+            if (JSON.stringify(fresh) !== JSON.stringify(contexts)) {
+                const ctxDiv = document.getElementById('tw-ctx-btns');
+                if (ctxDiv) ctxDiv.innerHTML = buildCtxBtns(getState(), fresh);
+                _applyState(getState());
+            }
+        });
     }
 
     async function fetchContexts() {

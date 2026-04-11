@@ -59,13 +59,13 @@ def run_task_command(args):
     """Execute a TaskWarrior command and return the result.
     args must be a list, e.g. ['task', 'status:pending', 'export'].
     shell=True is intentionally not used.
+
+    recurrence=no and confirmation=no are set in tw-web.rc (loaded at startup),
+    so no command-line rc overrides are needed here.
     """
     try:
         if args[0] != 'task':
             args = ['task'] + args
-        # Never trigger TW's recurrence engine from the web UI — it can fail
-        # on tasks managed by the recurrence-overhaul-hook (no built-in recur field)
-        args.insert(1, 'rc.recurrence=no')
 
         log_command(args)
 
@@ -224,6 +224,10 @@ def get_contexts():
 
     return jsonify({'success': True, 'contexts': contexts, 'filters': filters, 'active': active})
 
+def _warnings(result):
+    """Extract non-empty stderr lines as a warnings list."""
+    return [l for l in result['stderr'].splitlines() if l.strip()]
+
 @app.route('/api/task/<task_id>/start', methods=['POST'])
 def start_task(task_id):
     """Start a task"""
@@ -232,7 +236,8 @@ def start_task(task_id):
     result = run_task_command(['task', task_id, 'start'])
     return jsonify({
         'success': result['success'],
-        'message': result['stdout'] if result['success'] else result['stderr']
+        'message': result['stdout'] if result['success'] else result['stderr'],
+        'warnings': _warnings(result)
     })
 
 @app.route('/api/task/<task_id>/stop', methods=['POST'])
@@ -243,7 +248,8 @@ def stop_task(task_id):
     result = run_task_command(['task', task_id, 'stop'])
     return jsonify({
         'success': result['success'],
-        'message': result['stdout'] if result['success'] else result['stderr']
+        'message': result['stdout'] if result['success'] else result['stderr'],
+        'warnings': _warnings(result)
     })
 
 @app.route('/api/task/<task_id>/done', methods=['POST'])
@@ -254,7 +260,8 @@ def complete_task(task_id):
     result = run_task_command(['task', task_id, 'done'])
     return jsonify({
         'success': result['success'],
-        'message': result['stdout'] if result['success'] else result['stderr']
+        'message': result['stdout'] if result['success'] else result['stderr'],
+        'warnings': _warnings(result)
     })
 
 @app.route('/api/task/<task_id>/delete', methods=['DELETE'])
@@ -262,10 +269,11 @@ def delete_task(task_id):
     """Delete a task"""
     if not _valid_task_id(task_id):
         return jsonify({'success': False, 'message': 'Invalid task ID'}), 400
-    result = run_task_command(['task', 'rc.confirmation=off', task_id, 'delete'])
+    result = run_task_command(['task', task_id, 'delete'])
     return jsonify({
         'success': result['success'],
-        'message': result['stdout'] if result['success'] else result['stderr']
+        'message': result['stdout'] if result['success'] else result['stderr'],
+        'warnings': _warnings(result)
     })
 
 @app.route('/api/task/<task_id>/modify', methods=['PUT'])
@@ -307,9 +315,7 @@ def modify_task(task_id):
         modifications.append(f'state:{data["state"]}' if data['state'] else 'state:')
 
     if modifications:
-        result = run_task_command(
-            ['task', 'rc.confirmation=off', task_id, 'modify'] + modifications
-        )
+        result = run_task_command(['task', task_id, 'modify'] + modifications)
 
         if result['success']:
             export_result = run_task_command(['task', task_id, 'export'])
@@ -320,19 +326,21 @@ def modify_task(task_id):
                         return jsonify({
                             'success': True,
                             'message': result['stdout'],
-                            'task': task[0]
+                            'task': task[0],
+                            'warnings': _warnings(result)
                         })
                 except (json.JSONDecodeError, IndexError) as e:
                     print(f"Error parsing task data: {e}")
-                    return jsonify({'success': True, 'message': result['stdout'], 'task': None})
+                    return jsonify({'success': True, 'message': result['stdout'], 'task': None, 'warnings': _warnings(result)})
 
         return jsonify({
             'success': result['success'],
             'message': result['stdout'] if result['success'] else result['stderr'],
-            'task': None
+            'task': None,
+            'warnings': _warnings(result)
         })
     else:
-        return jsonify({'success': True, 'message': 'No changes to apply', 'task': None})
+        return jsonify({'success': True, 'message': 'No changes to apply', 'task': None, 'warnings': []})
 
 @app.route('/api/kanban/columns')
 def get_kanban_columns():
@@ -380,7 +388,8 @@ def add_task():
                     return jsonify({
                         'success': True,
                         'message': 'Task created successfully',
-                        'task': task[0]
+                        'task': task[0],
+                        'warnings': _warnings(create_result)
                     })
             except (json.JSONDecodeError, IndexError) as e:
                 print(f"Error parsing task data: {e}")
@@ -388,7 +397,8 @@ def add_task():
     return jsonify({
         'success': create_result.get('success', False),
         'error': create_result.get('stderr', 'Failed to create task'),
-        'task': None
+        'task': None,
+        'warnings': _warnings(create_result)
     })
 
 if __name__ == '__main__':

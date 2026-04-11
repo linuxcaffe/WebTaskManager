@@ -38,10 +38,13 @@ class TaskActionHandler {
                 } else if (data.task) {
                     this.onTaskUpdate(data.task);
                 } else {
-                    // Si pas de tâche retournée, on déclenche une recharge complète
                     this.onTaskUpdate(null);
                 }
-                this.showNotification(`Task ${action} successful`, 'success');
+                if (data.warnings && data.warnings.length > 0) {
+                    this.showNotification(data.warnings.join(' | '), 'warning');
+                } else {
+                    this.showNotification(`Task ${action} successful`, 'success');
+                }
             } else {
                 this.showNotification(data.message || `Failed to ${action} task`, 'error');
             }
@@ -131,6 +134,11 @@ class TaskCardManager {
         const durHtml = task.estTime ? `<span class="card-dur">⏱ ${this._fmtDur(this._parseDur(task.estTime))}</span>` : '';
         const tagsHtml = tags.map(t => `<span class="card-tag">+${this._e(t)}</span>`).join('');
 
+        const anns = task.annotations || [];
+        const annHtml = anns.length
+            ? `<div class="card-annotations">${anns.map(a => `<div class="card-ann">${this._e(a.description)}</div>`).join('')}</div>`
+            : '';
+
         const card = document.createElement('div');
         card.className = 'task-card';
         card.dataset.taskId   = task.uuid;
@@ -144,6 +152,7 @@ class TaskCardManager {
                     (pri ? `<span class="card-pri ${priClass}">${pri}</span>` : '') +
                     proj + dueHtml + durHtml + tagsHtml +
                 `</div>` +
+                annHtml +
             `</div>` +
             `<div class="card-actions">` +
                 `<button class="ca-btn ca-stop"   data-task-action="stop"   data-task-uuid="${task.uuid}" ${active ? '' : 'style="display:none"'}>⏸</button>` +
