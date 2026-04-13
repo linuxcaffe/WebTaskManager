@@ -73,6 +73,16 @@ def _get_recurrence_filter():
 
 RECURRING_FILTER = _get_recurrence_filter()
 
+# Environment passed to every task/hook subprocess.
+# TW_WEB=1 signals hooks that they are running in a non-interactive web context.
+# Hooks should check this and skip prompts, curses UIs, or interactive tools
+# (hledger-add, fzf, vim, whiptail, etc.), using defaults or deferring instead.
+_TW_ENV = {**os.environ, 'TW_WEB': '1'}
+
+# Timeout (seconds) for any single task command.
+# Prevents a hung interactive hook from deadlocking the Flask request.
+TASK_TIMEOUT = 15
+
 def run_task_command(args):
     """Execute a TaskWarrior command and return the result.
     args must be a list, e.g. ['task', 'status:pending', 'export'].
@@ -95,12 +105,25 @@ def run_task_command(args):
                 'returncode': 0
             }
 
-        result = subprocess.run(args, capture_output=True, text=True)
+        result = subprocess.run(
+            args, capture_output=True, text=True,
+            env=_TW_ENV, timeout=TASK_TIMEOUT
+        )
         return {
             'success': result.returncode == 0,
             'stdout': result.stdout,
             'stderr': result.stderr,
             'returncode': result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            'success': False,
+            'stdout': '',
+            'stderr': (
+                f'Command timed out after {TASK_TIMEOUT}s. '
+                'A hook may require terminal interaction — run this command in a terminal instead.'
+            ),
+            'returncode': -1
         }
     except Exception as e:
         return {
@@ -113,13 +136,18 @@ def run_task_command(args):
 def run_command(args):
     """Run an arbitrary command (not task). Returns same dict as run_task_command."""
     try:
-        result = subprocess.run(args, capture_output=True, text=True)
+        result = subprocess.run(
+            args, capture_output=True, text=True,
+            env=_TW_ENV, timeout=TASK_TIMEOUT
+        )
         return {
             'success': result.returncode == 0,
             'stdout': result.stdout,
             'stderr': result.stderr,
             'returncode': result.returncode
         }
+    except subprocess.TimeoutExpired:
+        return {'success': False, 'stdout': '', 'stderr': f'Command timed out after {TASK_TIMEOUT}s.', 'returncode': -1}
     except Exception as e:
         return {'success': False, 'stdout': '', 'stderr': str(e), 'returncode': -1}
 
