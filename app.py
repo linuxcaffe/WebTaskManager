@@ -55,6 +55,24 @@ def log_command(args):
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
+def _get_recurrence_filter():
+    """Return the TW filter string for the 'recurring' status button.
+    Reads recurrence.field from tw-web.rc (via task _show):
+      recurrence.field=r    → r.any:    (recurrence-overhaul hook)
+      recurrence.field=recur or unset → +RECURRING (standard TW)
+    """
+    result = subprocess.run(
+        ['task', '_show'], capture_output=True, text=True
+    )
+    for line in result.stdout.splitlines():
+        if line.startswith('recurrence.field='):
+            field = line.split('=', 1)[1].strip()
+            if field and field != 'recur':
+                return f'{field}.any:'
+    return '+RECURRING'
+
+RECURRING_FILTER = _get_recurrence_filter()
+
 def run_task_command(args):
     """Execute a TaskWarrior command and return the result.
     args must be a list, e.g. ['task', 'status:pending', 'export'].
@@ -91,6 +109,19 @@ def run_task_command(args):
             'stderr': str(e),
             'returncode': -1
         }
+
+def run_command(args):
+    """Run an arbitrary command (not task). Returns same dict as run_task_command."""
+    try:
+        result = subprocess.run(args, capture_output=True, text=True)
+        return {
+            'success': result.returncode == 0,
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'returncode': result.returncode
+        }
+    except Exception as e:
+        return {'success': False, 'stdout': '', 'stderr': str(e), 'returncode': -1}
 
 @app.route('/')
 def index():
@@ -135,7 +166,7 @@ def _build_task_filter(statuses, filter_text):
         'waiting':   'status:waiting',
         'completed': 'status:completed',
         'deleted':   'status:deleted',
-        'recurring': '+RECURRING',
+        'recurring': RECURRING_FILTER,
     }
     parts = [STATUS_MAP[s] for s in statuses if s in STATUS_MAP]
     if not parts:
@@ -342,6 +373,14 @@ def modify_task(task_id):
     else:
         return jsonify({'success': True, 'message': 'No changes to apply', 'task': None, 'warnings': []})
 
+@app.route('/api/config')
+def get_config():
+    """Return client-configurable settings."""
+    import config as _cfg
+    return jsonify({
+        'notification_timeout': getattr(_cfg, 'NOTIFICATION_TIMEOUT', 3000)
+    })
+
 @app.route('/api/kanban/columns')
 def get_kanban_columns():
     """Return configured kanban column names"""
@@ -399,6 +438,20 @@ def add_task():
         'error': create_result.get('stderr', 'Failed to create task'),
         'task': None,
         'warnings': _warnings(create_result)
+    })
+
+@app.route('/api/sync', methods=['POST'])
+def sync_tasks():
+    import shutil
+    if shutil.which('gittw'):
+        result = run_command(['gittw', 'sync'])
+    else:
+        result = run_task_command(['task', 'sync'])
+    output = result['stdout'].strip() or result['stderr'].strip()
+    return jsonify({
+        'success': result['success'],
+        'output': output,
+        'warnings': _warnings(result)
     })
 
 if __name__ == '__main__':
