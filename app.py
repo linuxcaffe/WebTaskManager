@@ -440,6 +440,18 @@ def add_task():
         'warnings': _warnings(create_result)
     })
 
+@app.route('/api/sync/info')
+def sync_info():
+    import shutil
+    if shutil.which('gittw'):
+        return jsonify({'method': 'gittw (git-based sync)'})
+    result = run_task_command(['task', '_show'])
+    has_server = any(
+        line.startswith('taskd.server=') and line.split('=', 1)[1].strip()
+        for line in result['stdout'].splitlines()
+    )
+    return jsonify({'method': 'task sync' + (' — server configured' if has_server else ' — no server configured')})
+
 @app.route('/api/sync', methods=['POST'])
 def sync_tasks():
     import shutil

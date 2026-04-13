@@ -530,31 +530,67 @@ h2 {
 /* Notifications */
 .notification {
     position: fixed;
-    bottom: 20px;
+    top: 102px;
     right: 20px;
-    padding: 15px 20px;
+    padding: 10px 14px;
     border-radius: 6px;
     color: white;
     font-weight: 500;
     z-index: 10000;
+    display: flex;
+    align-items: center;
+    gap: 4px;
     transform: translateX(400px);
     transition: transform 0.3s ease;
 }
+.notification.show { transform: translateX(0); }
+.notification.success { background: #27ae60; }
+.notification.error   { background: #e74c3c; }
+.notification.warning { background: #e67e22; }
 
-.notification.show {
-    transform: translateX(0);
+.notif-close {
+    background: none; border: none; color: rgba(255,255,255,0.7);
+    cursor: pointer; font-size: 18px; padding: 0 0 0 8px; line-height: 1;
 }
+.notif-close:hover { color: #fff; }
 
-.notification.success {
-    background: #27ae60;
+/* Sync dialog */
+.sync-dialog-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1100;
+    display: flex; align-items: center; justify-content: center;
 }
-
-.notification.error {
-    background: #e74c3c;
+.sync-dialog {
+    background: #2c3e50; color: #ecf0f1;
+    border-radius: 8px; min-width: 320px; max-width: 480px; width: 90%;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }
-
-.notification.warning {
-    background: #e67e22;
+.sync-dialog-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    font-size: 16px; font-weight: 600;
+}
+.sync-dialog-close {
+    background: none; border: none; color: #aaa;
+    font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px;
+}
+.sync-dialog-close:hover { color: #fff; }
+.sync-dialog-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.sync-method { font-size: 12px; color: #95a5a6; }
+.sync-now-btn {
+    background: #3498db; color: #fff; border: none;
+    padding: 10px 20px; border-radius: 5px; font-size: 14px; font-weight: 600;
+    cursor: pointer; align-self: flex-start;
+}
+.sync-now-btn:hover { background: #2980b9; }
+.sync-now-btn:disabled { background: #555; cursor: default; }
+.sync-output {
+    background: #1a252f; color: #bdc3c7;
+    border-radius: 4px; padding: 10px 12px;
+    font-size: 12px; white-space: pre-wrap; word-break: break-word;
+    margin: 0; max-height: 200px; overflow-y: auto;
 }
 
 /* Icons */

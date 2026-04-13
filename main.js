@@ -39,6 +39,24 @@ class TaskWarriorUI {
         document.addEventListener('tw-open-add', () => {
             if (typeof taskEditor !== 'undefined') taskEditor.show();
         });
+
+        // nav.js refresh button → show notification
+        document.addEventListener('tw-show-notification', (e) => {
+            const { message, type } = e.detail || {};
+            if (message) this.showNotification(message, type || 'success');
+        });
+
+        // Side menu Sync action → open sync dialog
+        document.addEventListener('tw-menu-action', (e) => {
+            if (e.detail.action !== 'sync') return;
+            this.openSyncDialog();
+        });
+
+        // Notification close button
+        const notifClose = document.getElementById('notif-close');
+        if (notifClose) notifClose.addEventListener('click', () => {
+            document.getElementById('notification').classList.remove('show');
+        });
     }
 
     initializeEventListeners() {
@@ -171,13 +189,15 @@ class TaskWarriorUI {
     // Filter tasks client-side using project/tags from nav state
     getFilteredTasks() {
         const state = window.twNav ? window.twNav.getState() : {};
-        const filter  = (state.filter  || '').trim().toLowerCase();
-        const project = (state.project || '').trim().toLowerCase();
-        const tags    = (state.tags    || '').split(',').map(t => t.trim()).filter(Boolean);
+        const filter   = (state.filter   || '').trim().toLowerCase();
+        const priority = (state.priority || '').trim().toLowerCase();
+        const project  = (state.project  || '').trim().toLowerCase();
+        const tags     = (state.tags     || '').split(',').map(t => t.trim()).filter(Boolean);
 
         return this.tasks.filter(task => {
-            if (filter  && !(task.description || '').toLowerCase().includes(filter)) return false;
-            if (project && !(task.project     || '').toLowerCase().includes(project)) return false;
+            if (filter   && !(task.description || '').toLowerCase().includes(filter)) return false;
+            if (priority && !String(task.priority || '').toLowerCase().includes(priority)) return false;
+            if (project  && !(task.project      || '').toLowerCase().includes(project)) return false;
             if (tags.length > 0 && !tags.every(t => (task.tags || []).includes(t))) return false;
             return true;
         });
@@ -219,19 +239,19 @@ class TaskWarriorUI {
         const container = document.getElementById('tasks-container');
         if (!container) return;
 
-        // Dynamic heading: "N <Status> Tasks"
+        const filteredTasks = this.getFilteredTasks();
+
+        // Dynamic heading: "N <Status> Tasks" — N is filtered count
         const heading = document.getElementById('tasks-heading');
         if (heading) {
             const state = window.twNav ? window.twNav.getState() : { statuses: ['pending'] };
             const status = state.statuses[0] || 'pending';
             const label = status.charAt(0).toUpperCase() + status.slice(1);
-            heading.textContent = `${this.tasks.length} ${label} Tasks`;
+            heading.textContent = `${filteredTasks.length} ${label} Tasks`;
         }
 
         // Update projects list whenever tasks are rendered
         this.updateProjectsList();
-
-        const filteredTasks = this.getFilteredTasks();
 
         if (window.twNav) window.twNav.setCount(filteredTasks.length, this.serverTotal != null ? this.serverTotal : this.tasks.length);
 
@@ -296,15 +316,67 @@ class TaskWarriorUI {
         document.getElementById('error-message').style.display = 'none';
     }
 
+    openSyncDialog() {
+        const dialog  = document.getElementById('sync-dialog');
+        const btn     = document.getElementById('sync-now-btn');
+        const output  = document.getElementById('sync-output');
+        const method  = document.getElementById('sync-method');
+        const closeBtn = document.getElementById('sync-dialog-close');
+
+        // Reset state
+        output.style.display = 'none';
+        output.textContent = '';
+        btn.disabled = false;
+        btn.textContent = 'Sync Now';
+
+        // Detect sync method
+        fetch('/api/sync/info')
+            .then(r => r.json())
+            .then(d => { method.textContent = `Method: ${d.method}`; })
+            .catch(() => { method.textContent = ''; });
+
+        dialog.style.display = 'flex';
+
+        const close = () => { dialog.style.display = 'none'; };
+        closeBtn.onclick = close;
+        dialog.onclick = (e) => { if (e.target === dialog) close(); };
+
+        btn.onclick = () => {
+            btn.disabled = true;
+            btn.textContent = 'Syncing…';
+            output.style.display = 'none';
+            fetch('/api/sync', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    const text = data.output || (data.success ? 'Sync complete.' : 'Sync failed.');
+                    output.textContent = text;
+                    output.style.display = 'block';
+                    btn.textContent = data.success ? 'Sync Now' : 'Retry';
+                    btn.disabled = false;
+                    if (data.success) this.loadTasks();
+                })
+                .catch(err => {
+                    output.textContent = 'Error: ' + err;
+                    output.style.display = 'block';
+                    btn.textContent = 'Retry';
+                    btn.disabled = false;
+                });
+        };
+    }
+
     showNotification(message, type = 'success') {
         const notification = document.getElementById('notification');
-        notification.textContent = message;
-        notification.className = `notification ${type}`;
-        notification.classList.add('show');
+        const textEl = document.getElementById('notif-text');
+        if (textEl) textEl.textContent = message;
+        else notification.textContent = message;
+        notification.className = `notification ${type} show`;
 
-        setTimeout(() => {
-            notification.classList.remove('show');
-        }, 3000);
+        const timeout = (window.twNotifTimeout != null) ? window.twNotifTimeout : 3000;
+        clearTimeout(this._notifTimer);
+        if (timeout > 0) {
+            this._notifTimer = setTimeout(() => notification.classList.remove('show'), timeout);
+        }
+        // timeout === 0: manual close only via × button
     }
 
     escapeHtml(text) {

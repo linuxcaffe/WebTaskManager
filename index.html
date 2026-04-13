@@ -3,12 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a1a">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/logo-192.png">
     <title>TaskWarrior Web UI</title>
     <link rel="stylesheet" href="styles.css">
     <script src="nav.js"></script>
     <script src="task-editor.js"></script>
     <script src="task-card.js"></script>
     <script src="main.js"></script>
+    <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
 </head>
 <body>
     <div class="container">
@@ -29,7 +33,24 @@
 
     <!-- Le modal d'édition sera créé dynamiquement par TaskEditor -->
 
-    <div id="notification" class="notification"></div>
+    <div id="sync-dialog" class="sync-dialog-backdrop" style="display:none">
+        <div class="sync-dialog">
+            <div class="sync-dialog-header">
+                <span>Sync</span>
+                <button id="sync-dialog-close" class="sync-dialog-close">×</button>
+            </div>
+            <div class="sync-dialog-body">
+                <div id="sync-method" class="sync-method"></div>
+                <button id="sync-now-btn" class="sync-now-btn">Sync Now</button>
+                <pre id="sync-output" class="sync-output" style="display:none"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification">
+        <span id="notif-text"></span>
+        <button class="notif-close" id="notif-close">×</button>
+    </div>
 
 </body>
 </html>
