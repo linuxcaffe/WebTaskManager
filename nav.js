@@ -99,7 +99,7 @@
 #tw-nav-bar {
     display: flex; justify-content: space-between; align-items: center;
     height: 50px; padding: 0 14px 0 0; background: #1a1a1a;
-    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    position: sticky; top: 0; z-index: 9999;
     box-shadow: 0 2px 6px rgba(0,0,0,0.4); gap: 8px; box-sizing: border-box;
 }
 #tw-btn-bar {
