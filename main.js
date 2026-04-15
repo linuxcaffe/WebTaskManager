@@ -17,7 +17,9 @@ class TaskWarriorUI {
             onCancel: () => this.handleTaskCancel()
         });
         
-        this.viewMode = localStorage.getItem('tw-view-mode') || 'card';
+        this.viewMode    = localStorage.getItem('tw-view-mode')    || 'card';
+        this.sortField   = localStorage.getItem('tw-sort-field')   || 'urgency';
+        this.sortReverse = localStorage.getItem('tw-sort-reverse') === 'true';
 
         // Wait for components to initialise before loading data
         setTimeout(() => {
@@ -59,6 +61,97 @@ class TaskWarriorUI {
         });
     }
 
+    // ── Sort ─────────────────────────────────────────────────────────────────
+
+    static get SORT_FIELDS() {
+        return [
+            { value: 'urgency',     label: 'Urgency (default)' },
+            { value: 'priority',    label: 'Priority' },
+            { value: 'due',         label: 'Due date' },
+            { value: 'description', label: 'Description' },
+            { value: 'project',     label: 'Project' },
+            { value: 'entry',       label: 'Created' },
+            { value: 'modified',    label: 'Modified' },
+            { value: 'start',       label: 'Started' },
+            { value: 'scheduled',   label: 'Scheduled' },
+            { value: 'wait',        label: 'Wait date' },
+            { value: 'id',          label: 'ID' },
+            { value: 'tags',        label: 'Tags' },
+        ];
+    }
+
+    sortTasks(tasks) {
+        const field = this.sortField;
+        const rev   = this.sortReverse ? -1 : 1;
+        if (field === 'urgency') return rev === 1 ? tasks : [...tasks].reverse();
+
+        const PRI = { H: 3, M: 2, L: 1 };
+        return [...tasks].sort((a, b) => {
+            let av = a[field], bv = b[field];
+            if (field === 'priority') { av = PRI[av] || 0; bv = PRI[bv] || 0; }
+            else if (field === 'tags') { av = (av || []).join(','); bv = (bv || []).join(','); }
+            // Dates come as ISO strings — sort as strings (lexicographic = chronological)
+            av = av ?? '';
+            bv = bv ?? '';
+            if (av < bv) return -1 * rev;
+            if (av > bv) return  1 * rev;
+            return 0;
+        });
+    }
+
+    updateSortBtn() {
+        const btn = document.getElementById('sort-btn');
+        if (!btn) return;
+        const isDefault = this.sortField === 'urgency' && !this.sortReverse;
+        btn.classList.toggle('sort-active', !isDefault);
+        const label = TaskWarriorUI.SORT_FIELDS.find(f => f.value === this.sortField)?.label || this.sortField;
+        btn.title = isDefault ? 'Sort' : `Sort: ${label}${this.sortReverse ? ' ↑' : ' ↓'}`;
+    }
+
+    initSortPopup() {
+        const btn     = document.getElementById('sort-btn');
+        const popup   = document.getElementById('sort-popup');
+        const fields  = document.getElementById('sort-fields');
+        const revBox  = document.getElementById('sort-reverse');
+        if (!btn || !popup || !fields || !revBox) return;
+
+        // Build radio list
+        fields.innerHTML = TaskWarriorUI.SORT_FIELDS.map(f =>
+            `<label><input type="radio" name="tw-sort" value="${f.value}"${f.value === this.sortField ? ' checked' : ''}> ${f.label}</label>`
+        ).join('');
+        revBox.checked = this.sortReverse;
+
+        // Toggle popup
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Field change
+        fields.addEventListener('change', (e) => {
+            if (e.target.name === 'tw-sort') {
+                this.sortField = e.target.value;
+                localStorage.setItem('tw-sort-field', this.sortField);
+                this.updateSortBtn();
+                this.renderTasks();
+            }
+        });
+
+        // Reverse toggle
+        revBox.addEventListener('change', () => {
+            this.sortReverse = revBox.checked;
+            localStorage.setItem('tw-sort-reverse', this.sortReverse);
+            this.updateSortBtn();
+            this.renderTasks();
+        });
+
+        // Close on outside click
+        document.addEventListener('click', () => { popup.style.display = 'none'; });
+        popup.addEventListener('click', (e) => e.stopPropagation());
+
+        this.updateSortBtn();
+    }
+
     initializeEventListeners() {
         const cardBtn = document.getElementById('view-card');
         const listBtn = document.getElementById('view-list');
@@ -79,6 +172,7 @@ class TaskWarriorUI {
             cardBtn.addEventListener('click', () => setView('card'));
             listBtn.addEventListener('click', () => setView('list'));
         }
+        this.initSortPopup();
 
         // Single-click anywhere on a card (not an action button) to expand/collapse
         const container = document.getElementById('tasks-container');
@@ -121,6 +215,7 @@ class TaskWarriorUI {
 
             if (tasksData.success) {
                 this.tasks = tasksData.tasks;
+                sessionStorage.setItem('tw-tasks-cache', JSON.stringify(this.tasks));
                 this.serverTotal = totalData && totalData.success ? totalData.tasks.length : this.tasks.length;
                 this.renderTasks();
                 if (tasksData.warnings && tasksData.warnings.length > 0) {
@@ -239,7 +334,7 @@ class TaskWarriorUI {
         const container = document.getElementById('tasks-container');
         if (!container) return;
 
-        const filteredTasks = this.getFilteredTasks();
+        const filteredTasks = this.sortTasks(this.getFilteredTasks());
 
         // Dynamic heading: "N <Status> Tasks" — N is filtered count
         const heading = document.getElementById('tasks-heading');
@@ -353,7 +448,7 @@ class TaskWarriorUI {
                     output.style.display = 'block';
                     btn.textContent = data.success ? 'Sync Now' : 'Retry';
                     btn.disabled = false;
-                    if (data.success) this.loadTasks();
+                    if (data.success) { this.loadTasks(); window.twPollSyncStatus?.(); }
                 })
                 .catch(err => {
                     output.textContent = 'Error: ' + err;

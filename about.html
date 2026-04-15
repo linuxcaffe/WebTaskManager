@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a1a">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/logo-192.png">
     <title>About — tw-web</title>
     <link rel="stylesheet" href="styles.css">
     <script src="/nav.js"></script>
@@ -17,6 +20,7 @@
         .about-container ul { margin: 0 0 12px 20px; color: #555; line-height: 1.9; }
         .about-container a  { color: #3498db; }
     </style>
+    <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
 </head>
 <body>
 <div class="about-container">

@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a1a">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/logo-192.png">
     <title>Calendar Planner</title>
 
     <!-- Toast UI Calendar CSS - The order is important ! -->
@@ -11,72 +14,46 @@
     <link rel="stylesheet" href="https://uicdn.toast.com/calendar/v2.1.3/toastui-calendar.min.css" />
 
     <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="calendar-planner.css">
     <script src="/nav.js"></script>
-
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
 </head>
-<body>
+<body class="cal-page">
     <div class="app-container">
-        <header class="app-header">
-            <h1>📅 Calendar Planner</h1>
-            <div class="header-actions">
-                <button id="today-btn" class="btn btn-primary">
-                    <span class="icon">📍</span>
-                    Today
-                </button>
-                <button id="refresh-btn" class="btn btn-secondary">
-                    <span class="icon">🔄</span>
-                    Refresh
-                </button>
+        <div class="cal-topbar">
+            <button id="prev-btn" class="nav-btn">◀</button>
+            <span id="calendar-title" class="cal-title-text"></span>
+            <div class="cal-topbar-right">
+                <button id="today-btn" class="view-btn active">Today</button>
+                <button class="view-btn" data-view="day">Day</button>
+                <button class="view-btn active" data-view="week">Week</button>
+                <button class="view-btn" data-view="month">Month</button>
+                <button id="next-btn" class="nav-btn">▶</button>
             </div>
-        </header>
+        </div>
 
         <div class="main-content">
             <!-- Left column: calendar (70%) -->
             <div class="calendar-column">
-                <div class="calendar-header">
-                    <button id="prev-btn" class="nav-btn">
-                        <span class="icon">◀</span>
-                    </button>
-                    <div class="calendar-title">
-                        <h2 id="calendar-title">Calendar</h2>
-                        <div class="view-controls">
-                            <button class="view-btn active" data-view="week">Week</button>
-                            <button class="view-btn" data-view="day">Day</button>
-                            <button class="view-btn" data-view="month">Month</button>
-                        </div>
-                    </div>
-                    <button id="next-btn" class="nav-btn">
-                        <span class="icon">▶</span>
-                    </button>
-                </div>
                 <div id="calendar" class="calendar-container"></div>
             </div>
 
             <!-- Right column: unscheduled tasks (30%) -->
             <div class="tasks-column">
-                <div class="tasks-header">
-                    <h2>Tasks to schedule</h2>
-                    <div class="tasks-stats">
-                        <span id="task-count" class="stat-badge">0 tasks</span>
+                <div class="tasks-controls">
+                    <div class="sort-wrap">
+                        <button id="cal-sort-btn" class="view-btn" title="Sort">⇅</button>
+                        <div id="cal-sort-popup" class="sort-popup" style="display:none">
+                            <div class="sort-fields" id="cal-sort-fields"></div>
+                            <label class="sort-reverse-label">
+                                <input type="checkbox" id="cal-sort-reverse"> Reverse
+                            </label>
+                        </div>
                     </div>
+                    <button id="cal-view-card" class="view-btn active" title="Card view">⊞</button>
+                    <button id="cal-view-list" class="view-btn" title="List view">≡</button>
                 </div>
-
-                <div class="tasks-filters">
-                    <select id="filter-pool" class="filter-select">
-                        <option value="all">All pools</option>
-                        <option value="pro">Pro</option>
-                        <option value="perso">Perso</option>
-                    </select>
-                    <select id="sort-tasks" class="filter-select">
-                        <option value="urgency">By urgency</option>
-                        <option value="due">By due date</option>
-                        <option value="duration">By duration</option>
-                    </select>
-                </div>
-
                 <div class="tasks-container" id="unplanned-tasks">
                     <div class="loading-message">
                         <span class="icon">⏳</span>
@@ -105,12 +82,34 @@
         </div>
     </div>
 
+    <!-- Sync dialog (identical to index.html) -->
+    <div id="sync-dialog" class="sync-dialog-backdrop" style="display:none">
+        <div class="sync-dialog">
+            <div class="sync-dialog-header">
+                <span>Sync</span>
+                <button id="sync-dialog-close" class="sync-dialog-close">×</button>
+            </div>
+            <div class="sync-dialog-body">
+                <div id="sync-method" class="sync-method"></div>
+                <button id="sync-now-btn" class="sync-now-btn">Sync Now</button>
+                <pre id="sync-output" class="sync-output" style="display:none"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification (same element as index.html so styles.css rules apply) -->
+    <div id="notification" class="notification">
+        <span id="notif-text"></span>
+        <button class="notif-close" id="notif-close">&times;</button>
+    </div>
+
     <!-- Toast UI Calendar JS - The order is important-->
     <script src="https://uicdn.toast.com/tui.time-picker/latest/tui-time-picker.js"></script>
     <script src="https://uicdn.toast.com/tui.date-picker/latest/tui-date-picker.js"></script>
     <script src="https://uicdn.toast.com/calendar/v2.1.3/toastui-calendar.min.js"></script>
     <!-- Custom JS -->
     <script src="task-card.js"></script>
+    <script src="task-editor.js"></script>
     <script src="calendar-planner.js"></script>
 </body>
 </html>

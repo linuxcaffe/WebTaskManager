@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a1a">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/logo-192.png">
     <title>Add Task — Taskwarrior</title>
     <link rel="stylesheet" href="styles.css">
     <script src="/nav.js"></script>
@@ -38,6 +41,7 @@
         #add-notification.success { background: #e8f5e9; color: #2e7d32; }
         #add-notification.error   { background: #fde8e8; color: #b71c1c; }
     </style>
+    <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
 </head>
 <body>
 <div class="add-page">

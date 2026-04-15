@@ -32,6 +32,16 @@ body {
     overflow-x: hidden;
 }
 
+/* nav.js inserts #tw-nav-bar (50px) + #tw-btn-bar (50px) before .app-container in the DOM.
+   Without this, .app-container {height:100vh} makes the page 100px taller than the viewport.
+   Solution: body as flex column takes 100vh; .app-container gets the remainder via flex:1. */
+body.cal-page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
 /* ===================================
    Container Principal
    =================================== */
@@ -42,30 +52,42 @@ body {
     max-width: 100%;
 }
 
+body.cal-page .app-container {
+    height: auto;   /* override height:100vh — flex:1 below does the sizing */
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
 /* ===================================
-   Header
+   Top navigation bar (single line)
    =================================== */
-.app-header {
-    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    color: white;
-    padding: 1rem 2rem;
+.cal-topbar {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    box-shadow: var(--shadow);
-    z-index: 100;
+    gap: 0.5rem;
+    padding: 6px 12px;
+    background: #1a1a1a;
+    color: #fff;
+    flex-shrink: 0;
 }
 
-.app-header h1 {
-    font-size: 1.8rem;
+.cal-title-text {
+    font-size: 0.95rem;
     font-weight: 500;
-    margin: 0;
+    white-space: nowrap;
+    flex: 1;
+    padding-left: 4px;
 }
 
-.header-actions {
+.cal-topbar-right {
     display: flex;
-    gap: 0.75rem;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
 }
+
+.header-actions { display: flex; gap: 0.75rem; }
 
 /* ===================================
    Boutons
@@ -151,106 +173,84 @@ body {
     overflow: hidden;
 }
 
-.calendar-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.5rem;
-    border-bottom: 2px solid var(--border-color);
-    background: linear-gradient(to bottom, #ffffff, #f8f9fa);
-}
 
-.calendar-title {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    flex: 1;
-}
-
-.calendar-title h2 {
-    font-size: 1.5rem;
-    font-weight: 500;
-    color: var(--dark-text);
-    margin: 0;
-}
-
-.view-controls {
-    display: flex;
-    gap: 0.5rem;
-    background-color: var(--light-bg);
-    padding: 0.25rem;
-    border-radius: 8px;
-}
-
-.view-btn {
-    padding: 0.4rem 1rem;
-    border: none;
+.cal-topbar .view-btn {
+    padding: 3px 10px;
+    border: 1px solid rgba(255,255,255,0.25);
     background: transparent;
-    color: var(--secondary-color);
-    border-radius: 6px;
+    color: rgba(255,255,255,0.75);
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 500;
-    transition: all 0.2s ease;
+    transition: background 0.15s, color 0.15s;
 }
 
-.view-btn:hover {
-    background-color: rgba(74, 144, 226, 0.1);
-    color: var(--primary-color);
-}
+.cal-topbar .view-btn:hover  { background: rgba(255,255,255,0.12); color: #fff; }
+.cal-topbar .view-btn.active { background: var(--primary-color);   color: #fff; border-color: var(--primary-color); }
 
-.view-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-}
-
-.nav-btn {
-    padding: 0.5rem 1rem;
-    border: 1px solid var(--border-color);
-    background: white;
-    border-radius: 6px;
+.cal-topbar .nav-btn {
+    padding: 3px 9px;
+    border: 1px solid rgba(255,255,255,0.25);
+    background: transparent;
+    color: rgba(255,255,255,0.75);
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 1.2rem;
-    transition: all 0.2s ease;
+    font-size: 1rem;
+    transition: background 0.15s;
 }
 
-.nav-btn:hover {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
+.cal-topbar .nav-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+/* Sidebar task list controls strip */
+.tasks-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-color);
+    background: #fafafa;
 }
 
 .calendar-container {
     flex: 1;
-    overflow: auto;
-    padding: 1rem;
+    min-height: 0;         /* let flex shrink below 600px */
+    overflow: hidden;      /* TUI Calendar owns its internal scroll */
+    padding: 0;
     display: flex;
     flex-direction: column;
-    min-height: 600px; /* Hauteur minimale pour le conteneur */
+    position: relative;    /* contains scroll indicator overlays */
 }
+
+/* Off-screen event indicators — shown at top/bottom of time grid in week/day view */
+.cal-scroll-indicator {
+    position: absolute;
+    left: 0; right: 0;
+    height: 22px;
+    z-index: 5;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: bold;
+    color: rgba(74, 144, 226, 0.85);
+}
+#cal-scroll-top    { top: 0;    background: linear-gradient(to bottom, rgba(74,144,226,0.25), transparent); }
+#cal-scroll-bottom { bottom: 0; background: linear-gradient(to top,   rgba(74,144,226,0.25), transparent); }
 
 #calendar {
     flex: 1;
     width: 100%;
-    min-height: 600px; /* Hauteur minimale pour le calendrier */
+    min-height: 0;
 }
 
-/* S'assurer que le conteneur principal a une hauteur définie */
-.main-content {
-    min-height: calc(100vh - 80px); /* Hauteur de l'écran moins l'en-tête */
-}
-
-@media (max-width: 768px) {
-    .main-content {
-        min-height: 100vh; /* Pleine hauteur pour les écrans mobiles */
-    }
-}
-
+/* main-content fills the remaining viewport — no min-height override */
 .calendar-column {
     display: flex;
     flex-direction: column;
-    min-height: 600px;
+    min-height: 0;
 }
 
 /* ===================================
@@ -263,59 +263,13 @@ body {
     background: white;
     border-radius: 12px;
     box-shadow: var(--shadow);
-    overflow: hidden;
+    /* overflow: hidden removed — it clips the absolutely-positioned sort popup */
 }
 
-.tasks-header {
-    padding: 1.5rem;
-    border-bottom: 2px solid var(--border-color);
-    background: linear-gradient(to bottom, #ffffff, #f8f9fa);
-}
+/* task cards in sidebar are draggable */
+.tasks-column .task-card { cursor: grab; }
+.tasks-column .task-card:active { cursor: grabbing; }
 
-.tasks-header h2 {
-    font-size: 1.3rem;
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-}
-
-.tasks-stats {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.stat-badge {
-    display: inline-block;
-    padding: 0.3rem 0.8rem;
-    background-color: var(--primary-color);
-    color: white;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 500;
-}
-
-.tasks-filters {
-    padding: 1rem 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    border-bottom: 1px solid var(--border-color);
-    background-color: var(--light-bg);
-}
-
-.filter-select {
-    padding: 0.6rem;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.9rem;
-    background-color: white;
-    cursor: pointer;
-    transition: border-color 0.2s ease;
-}
-
-.filter-select:focus {
-    outline: none;
-    border-color: var(--primary-color);
-}
 
 .tasks-container {
     flex: 1;
@@ -549,30 +503,102 @@ body {
 /* ===================================
    Personnalisation Toast UI Calendar
    =================================== */
-.toastui-calendar-template-time {
+
+/* Event template */
+.toastui-calendar-template-time,
+.toastui-calendar-template-allday {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
     font-size: 0.85rem;
+}
+.cal-ev-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Narrow viewport: text-only → hide text; TUI's own colored event bar is the indicator.
+   One colored indicator per event, no double-dot.
+   Threshold: ~768px. Edit this value to taste. */
+@media (max-width: 768px) {
+    .cal-ev-title { display: none; }
 }
 
 .toastui-calendar-event {
     border-radius: 4px;
 }
 
+/* Task detail modal table */
+.task-detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+}
+.task-detail-table th {
+    text-align: left;
+    padding: 4px 12px 4px 0;
+    color: #666;
+    font-weight: 500;
+    width: 30%;
+    vertical-align: top;
+}
+.task-detail-table td {
+    padding: 4px 0;
+    color: #222;
+}
+
 /* ===================================
    Responsive Design
    =================================== */
 @media (max-width: 1024px) {
-    .main-content {
-        flex-direction: column;
-    }
-    
-    .calendar-column,
+    /* Hide the task sidebar — drag-to-schedule doesn't work in narrow layout anyway */
     .tasks-column {
-        flex: 1 1 auto;
-        min-height: 400px;
+        display: none;
     }
-    
     .calendar-column {
-        max-height: 60vh;
+        flex: 1 1 100%;
+    }
+}
+
+/* ── Mobile mode (portrait / narrow viewport) ──────────────────────────────── */
+@media (max-width: 600px) {
+    .main-content  { padding: 0.25rem; gap: 0.25rem; }
+    .cal-topbar    { padding: 4px 6px; gap: 3px; }
+    .cal-topbar .view-btn { padding: 2px 6px; font-size: 0.75rem; }
+    .cal-topbar .nav-btn  { padding: 2px 6px; }
+
+    /* TUI Calendar: hide week numbers at mobile (too narrow to be useful) */
+    .toastui-calendar-weeknum,
+    .toastui-calendar-month-weeknum,
+    .toastui-calendar-left-content { display: none !important; }
+}
+
+/* Week numbers: shrink font before they trigger a horizontal scrollbar */
+@media (max-width: 900px) {
+    .toastui-calendar-weeknum,
+    .toastui-calendar-month-weeknum,
+    .toastui-calendar-left-content {
+        font-size: 0.6em !important;
+        min-width: 0 !important;
+    }
+}
+
+/* Week/day column header date labels — scale down, never hide */
+@media (max-width: 768px) {
+    .toastui-calendar-day-name,
+    .toastui-calendar-day-name__name,
+    .toastui-calendar-day-name__date {
+        font-size: 0.78em !important;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+}
+@media (max-width: 500px) {
+    .toastui-calendar-day-name,
+    .toastui-calendar-day-name__name,
+    .toastui-calendar-day-name__date {
+        font-size: 0.6em !important;
     }
 }
 

@@ -161,10 +161,26 @@ def static_files(filename):
     """Serve static files (CSS, JS, etc.)"""
     return send_from_directory('.', filename)
 
+@app.route('/api/tasks/due')
+def get_due_tasks():
+    """Get tasks that have a due date but no scheduled date (for calendar due-event display)."""
+    statuses = [s.strip() for s in request.args.get('status', 'pending').split(',') if s.strip()]
+    status_args = _build_task_filter(statuses, None)
+    result = run_task_command(['task', 'due.not:', 'scheduled:'] + status_args + ['export'])
+    if result['success']:
+        try:
+            tasks = json.loads(result['stdout'])
+            return jsonify({'success': True, 'data': tasks})
+        except json.JSONDecodeError as e:
+            return jsonify({'success': False, 'error': f'JSON decode error: {str(e)}'}), 500
+    return jsonify({'success': False, 'error': 'Failed to retrieve due tasks', 'stderr': result['stderr']}), 500
+
 @app.route('/api/tasks/planned')
 def get_planned_tasks():
     """Get all planned tasks (with scheduled date) in JSON format"""
-    result = run_task_command(['task', 'scheduled.not:', 'export'])
+    statuses = [s.strip() for s in request.args.get('status', 'pending').split(',') if s.strip()]
+    status_args = _build_task_filter(statuses, None)
+    result = run_task_command(['task', 'scheduled.not:'] + status_args + ['export'])
 
     if result['success']:
         try:
@@ -367,8 +383,8 @@ def modify_task(task_id):
     if 'project' in data:
         modifications.append(f'project:{data["project"]}' if data['project'] else 'project:')
 
-    if 'estTime' in data and data['estTime']:
-        modifications.append(f'estTime:{data["estTime"]}')
+    if 'sched_duration' in data and data['sched_duration']:
+        modifications.append(f'sched_duration:{data["sched_duration"]}')
 
     if 'state' in data:
         modifications.append(f'state:{data["state"]}' if data['state'] else 'state:')
@@ -441,8 +457,8 @@ def add_task():
     if data.get('project'):
         args.append(f'project:{data["project"]}')
 
-    if data.get('estTime'):
-        args.append(f'estTime:{data["estTime"]}')
+    if data.get('sched_duration'):
+        args.append(f'sched_duration:{data["sched_duration"]}')
 
     create_result = run_task_command(args)
 
@@ -467,6 +483,19 @@ def add_task():
         'task': None,
         'warnings': _warnings(create_result)
     })
+
+@app.route('/api/sync/status')
+def sync_status():
+    from pathlib import Path
+    task_dir = Path.home() / '.task'
+    if not (task_dir / '.git').exists():
+        return jsonify({'changes': 0, 'git': False})
+    result = subprocess.run(
+        ['git', '-C', str(task_dir), 'status', '--porcelain'],
+        capture_output=True, text=True
+    )
+    changes = len([l for l in result.stdout.splitlines() if l.strip()])
+    return jsonify({'changes': changes, 'git': True})
 
 @app.route('/api/sync/info')
 def sync_info():

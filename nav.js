@@ -117,6 +117,8 @@
 }
 .tw-logo-btn:hover { opacity: 0.8; }
 .tw-logo { height: 50px; width: 50px; display: block; }
+.tw-logo.sync-pending { filter: sepia(1) saturate(6) hue-rotate(5deg) brightness(1.15); }
+.tw-menu-item.sync-pending { color: #f0b429 !important; }
 
 /* brand name button → refresh */
 #tw-brand-refresh {
@@ -462,6 +464,11 @@
         _updateFilterBar(state);
         bindEvents();
 
+        // Sync status indicator
+        pollSyncStatus();
+        setInterval(pollSyncStatus, 60_000);
+        window.twPollSyncStatus = pollSyncStatus;
+
         // Background: refresh context list, update buttons if changed
         fetchContexts().then(({ names, filters }) => {
             ss(CTX_KEY, names);
@@ -478,6 +485,31 @@
         fetch('/api/config').then(r => r.json()).then(d => {
             window.twNotifTimeout = (d.notification_timeout != null) ? d.notification_timeout : 3000;
         }).catch(() => { window.twNotifTimeout = 3000; });
+    }
+
+    function updateSyncIndicator(changes) {
+        const logo    = document.querySelector('.tw-logo');
+        const logoBtn = document.getElementById('tw-logo-btn');
+        const syncBtn = document.querySelector('.tw-menu-item[data-menu="sync"]');
+        if (changes > 0) {
+            logo?.classList.add('sync-pending');
+            logoBtn?.setAttribute('title', `${changes} change(s) — Menu`);
+            syncBtn?.classList.add('sync-pending');
+            if (syncBtn) syncBtn.textContent = `Sync (${changes})`;
+        } else {
+            logo?.classList.remove('sync-pending');
+            logoBtn?.setAttribute('title', 'Menu');
+            syncBtn?.classList.remove('sync-pending');
+            if (syncBtn) syncBtn.textContent = 'Sync';
+        }
+    }
+
+    async function pollSyncStatus() {
+        try {
+            const r = await fetch('/api/sync/status');
+            const d = await r.json();
+            updateSyncIndicator(d.changes || 0);
+        } catch {}
     }
 
     async function fetchContexts() {

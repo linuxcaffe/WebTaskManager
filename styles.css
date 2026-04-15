@@ -58,6 +58,28 @@ body {
 }
 .view-btn.active { background: #3498db; border-color: #3498db; color: #fff; }
 .view-btn:hover:not(.active) { background: #f0f0f0; }
+.view-btn.sort-active { border-color: #f0b429; color: #f0b429; }
+
+.sort-wrap { position: relative; }
+.sort-popup {
+    position: absolute; right: 0; top: calc(100% + 4px);
+    background: #fff; border: 1px solid #ccc; border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000;
+    padding: 8px 0 6px; min-width: 180px;
+}
+.sort-fields { display: flex; flex-direction: column; }
+.sort-fields label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 14px; font-size: 0.9em; cursor: pointer;
+    white-space: nowrap;
+}
+.sort-fields label:hover { background: #f5f5f5; }
+.sort-fields input[type="radio"] { accent-color: #3498db; }
+.sort-reverse-label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px 2px; font-size: 0.9em; cursor: pointer;
+    border-top: 1px solid #eee; margin-top: 4px;
+}
 
 .header-content {
     display: flex;
@@ -320,9 +342,7 @@ h2 {
     font-size: 0.92em;
     color: #222;
     margin-bottom: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
 }
 .card-meta {
     display: flex;
@@ -384,73 +404,73 @@ h2 {
 .ca-delete:hover     { color: #e74c3c; }
 
 /* ── List view ───────────────────────────────────────────────── */
-#tasks-container.list-view .task-card {
+:is(#tasks-container, #unplanned-tasks).list-view .task-card {
     margin-bottom: 2px;
     border-radius: 3px;
     cursor: pointer;
 }
-#tasks-container.list-view .card-main {
+:is(#tasks-container, #unplanned-tasks).list-view .card-main {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 4px 10px;
 }
-#tasks-container.list-view .card-desc {
+:is(#tasks-container, #unplanned-tasks).list-view .card-desc {
     margin-bottom: 0;
     flex: 1;
 }
-#tasks-container.list-view .card-meta .card-pri,
-#tasks-container.list-view .card-meta .card-due,
-#tasks-container.list-view .card-meta .card-dur { display: none; }
-#tasks-container.list-view .card-actions { display: none; }
-#tasks-container.list-view .task-card:not(.expanded) .card-annotations { display: none; }
-#tasks-container.list-view .task-card:hover { box-shadow: none; background: #f8f8f8; }
+:is(#tasks-container, #unplanned-tasks).list-view .card-meta .card-pri,
+:is(#tasks-container, #unplanned-tasks).list-view .card-meta .card-due,
+:is(#tasks-container, #unplanned-tasks).list-view .card-meta .card-dur { display: none; }
+:is(#tasks-container, #unplanned-tasks).list-view .card-actions { display: none; }
+:is(#tasks-container, #unplanned-tasks).list-view .task-card:not(.expanded) .card-annotations { display: none; }
+:is(#tasks-container, #unplanned-tasks).list-view .task-card:hover { box-shadow: none; background: #f8f8f8; }
 
 /* ── Collapsed card within card view ────────────────────────── */
-#tasks-container:not(.list-view) .task-card.collapsed {
+:is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed {
     margin-bottom: 2px;
     border-radius: 3px;
     cursor: pointer;
 }
-#tasks-container:not(.list-view) .task-card.collapsed .card-main {
+:is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-main {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 4px 10px;
 }
-#tasks-container:not(.list-view) .task-card.collapsed .card-desc {
+:is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-desc {
     margin-bottom: 0;
     flex: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-#tasks-container:not(.list-view) .task-card.collapsed .card-meta .card-pri,
-#tasks-container:not(.list-view) .task-card.collapsed .card-meta .card-due,
-#tasks-container:not(.list-view) .task-card.collapsed .card-meta .card-dur { display: none; }
-#tasks-container:not(.list-view) .task-card.collapsed .card-actions { display: none; }
-#tasks-container:not(.list-view) .task-card.collapsed .card-annotations { display: none; }
-#tasks-container:not(.list-view) .task-card.collapsed:hover { box-shadow: none; background: #f8f8f8; }
+:is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-meta .card-pri,
+:is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-meta .card-due,
+:is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-meta .card-dur { display: none; }
+:is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-actions { display: none; }
+:is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-annotations { display: none; }
+:is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed:hover { box-shadow: none; background: #f8f8f8; }
 
 /* ── Expanded card within list view ─────────────────────────── */
-#tasks-container.list-view .task-card.expanded {
+:is(#tasks-container, #unplanned-tasks).list-view .task-card.expanded {
     margin-bottom: 7px;
     border-radius: 6px;
     cursor: default;
 }
-#tasks-container.list-view .task-card.expanded .card-main {
+:is(#tasks-container, #unplanned-tasks).list-view .task-card.expanded .card-main {
     display: block;
     padding: 8px 12px;
 }
-#tasks-container.list-view .task-card.expanded .card-desc {
+:is(#tasks-container, #unplanned-tasks).list-view .task-card.expanded .card-desc {
     margin-bottom: 4px;
     white-space: normal;
 }
-#tasks-container.list-view .task-card.expanded .card-meta .card-pri,
-#tasks-container.list-view .task-card.expanded .card-meta .card-due,
-#tasks-container.list-view .task-card.expanded .card-meta .card-dur { display: inline; }
-#tasks-container.list-view .task-card.expanded .card-actions { display: flex; }
-#tasks-container.list-view .task-card.expanded:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.1); background: #fff; }
+:is(#tasks-container, #unplanned-tasks).list-view .task-card.expanded .card-meta .card-pri,
+:is(#tasks-container, #unplanned-tasks).list-view .task-card.expanded .card-meta .card-due,
+:is(#tasks-container, #unplanned-tasks).list-view .task-card.expanded .card-meta .card-dur { display: inline; }
+:is(#tasks-container, #unplanned-tasks).list-view .task-card.expanded .card-actions { display: flex; }
+:is(#tasks-container, #unplanned-tasks).list-view .task-card.expanded:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.1); background: #fff; }
 
 /* Modal */
 .modal {
@@ -530,7 +550,7 @@ h2 {
 /* Notifications */
 .notification {
     position: fixed;
-    top: 102px;
+    bottom: 20px;
     right: 20px;
     padding: 10px 14px;
     border-radius: 6px;

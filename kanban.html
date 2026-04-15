@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a1a">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/logo-192.png">
     <title>TaskWarrior Kanban</title>
     <link rel="stylesheet" href="styles.css">
     <script src="/nav.js"></script>
@@ -115,6 +118,7 @@
         }
         .status-line.error { color: #c62828; }
     </style>
+    <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
 </head>
 <body>
 <div class="container">

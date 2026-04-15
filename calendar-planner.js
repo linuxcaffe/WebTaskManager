@@ -7,15 +7,12 @@
  * Valriables globales
  */
 let calendar;
+let taskEditor;
 let unplannedTasks = [];
 let allTasks = [];
-let currentFilter = {
-    pool: 'all',
-    sort: 'urgency'
-};
 let selectedTaskCard = null;
 let selectedTaskData = null;
-let tempEventData = null; 
+let tempEventData = null;
 
 /**
  * Initialisation
@@ -23,16 +20,56 @@ let tempEventData = null;
 document.addEventListener('DOMContentLoaded', () => {
     // Initialiser taskCardManager avec le gestionnaire d'actions pour calendar-planner
     taskCardManager = new TaskCardManager(new CalendarTaskActionHandler());
+
+    // Global taskEditor instance (used by task-card.js action buttons)
+    taskEditor = new TaskEditor({
+        showAllFields: true,
+        priorityFormat: 'letters',
+        language: 'en',
+        modalId: 'unified-task-editor',
+        onSaveSuccess: () => loadTasks(),
+        onSaveError: (error) => document.dispatchEvent(new CustomEvent('tw-show-notification',
+            { detail: { message: error, type: 'error' } })),
+        onCancel: () => {}
+    });
+
     initializeCalendar();
     setupEventListeners();
+    initSidebarControls();
     loadTasks();
-    console.log('SetupTasksSelection');
-    console.log('Setup Task Selection Done');
-    
-    // Ajouter un écouteur d'événements pour les événements taskSelected
+
+    createScrollIndicators();
+
+    // TUI Calendar week/day view needs an explicit pixel height on #calendar to lay out
+    // the time grid correctly. Month view works without it (grid-based), but week/day
+    // expands to full content height otherwise. Measure after flex layout is settled.
+    requestAnimationFrame(() => {
+        fitCalendarHeight();
+        const cont = document.querySelector('.calendar-container');
+        if (cont) new ResizeObserver(fitCalendarHeight).observe(cont);
+    });
+    window.addEventListener('resize', fitCalendarHeight);
+
     document.addEventListener('taskSelected', (e) => {
         handleTaskCardClick(e.detail.cardElement);
     });
+
+    // Mirror nav notifications to local notification bar
+    document.addEventListener('tw-show-notification', (e) => {
+        const { message, type } = e.detail || {};
+        if (message) showCalNotification(message, type || 'info');
+    });
+
+    // Sync via nav hamburger menu → open dialog (same UX as List page)
+    document.addEventListener('tw-menu-action', (e) => {
+        if (e.detail.action !== 'sync') return;
+        openSyncDialog();
+    });
+
+    // Close notification button
+    const notifClose = document.getElementById('notif-close');
+    if (notifClose) notifClose.addEventListener('click', () =>
+        document.getElementById('notification')?.classList.remove('show'));
 });
 
 /**
@@ -44,15 +81,15 @@ function initializeCalendar() {
     calendar = new tui.Calendar(calendarEl, {
         defaultView: 'week',
         useFormPopup: true,
-        useDetailPopup: true,
+        useDetailPopup: false,   // we own the detail popup via clickEvent
         usageStatistics: false,
         isReadOnly: false,
         week: {
-            startDayOfWeek: 1, // Lundi
-            dayNames: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
+            startDayOfWeek: 1,
+            dayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
             hourStart: 6,
             hourEnd: 23,
-            taskView: true,
+            taskView: false,
             eventView: ['time'],
             collapseDuplicateEvents: {
                 getDuplicateEvents: (targetEvent, events) => {
@@ -62,20 +99,23 @@ function initializeCalendar() {
             }
         },
         month: {
-            dayNames: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
+            dayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
             startDayOfWeek: 1,
             narrowWeekend: true
         },
         template: {
-            time(event) {
-                const { title } = event;
-                return `<div class="calendar-event-title">${title}</div>`;
-            },
-            popupSave() {
-              return 'Add';
-            }
+            time(event)   { return `<span class="cal-ev-title">${event.title}</span>`; },
+            allday(event) { return `<span class="cal-ev-title">${event.title}</span>`; },
+            popupSave()   { return 'Add'; }
         },
         calendars: [
+            {
+                id: 'scheduled',
+                name: 'Scheduled',
+                backgroundColor: '#4a90e2',
+                borderColor: '#357abd',
+                color: '#fff',
+            },
             {
                 id: 'pro',
                 name: 'Pool Pro',
@@ -87,6 +127,13 @@ function initializeCalendar() {
                 name: 'Pool Perso',
                 backgroundColor: '#ffc107',
                 borderColor: '#e0a800',
+            },
+            {
+                id: 'due',
+                name: 'Due',
+                backgroundColor: '#e74c3c',
+                borderColor: '#c0392b',
+                color: '#fff',
             }
         ]
     });
@@ -98,81 +145,67 @@ function initializeCalendar() {
  * Configuration des écouteurs d'événements 
  */
 function setupEventListeners() {
-    // Navigation du calendrier
-    const prevBtn = document.getElementById('prev-btn');
-    const nextBtn = document.getElementById('next-btn');
-    const todayBtn = document.getElementById('today-btn');
-    
-    console.log('Boutons de navigation:', { prevBtn, nextBtn, todayBtn });
-    
-    prevBtn.addEventListener('click', () => {
-        console.log('Bouton précédent cliqué');
-        try {
-            calendar.prev();
-            console.log('Navigation précédente effectuée');
-            updateCalendarTitle();
-        } catch (error) {
-            console.error('Erreur lors de la navigation précédente:', error);
-        }
+    document.getElementById('prev-btn').addEventListener('click', () => {
+        calendar.prev(); updateCalendarTitle();
+    });
+    document.getElementById('next-btn').addEventListener('click', () => {
+        calendar.next(); updateCalendarTitle();
+    });
+    document.getElementById('today-btn').addEventListener('click', () => {
+        calendar.today(); updateCalendarTitle();
     });
 
-    nextBtn.addEventListener('click', () => {
-        console.log('Bouton suivant cliqué');
-        try {
-            calendar.next();
-            console.log('Navigation suivante effectuée');
-            updateCalendarTitle();
-        } catch (error) {
-            console.error('Erreur lors de la navigation suivante:', error);
-        }
+    // View buttons (data-view attribute)
+    document.querySelectorAll('.view-btn[data-view]').forEach(btn => {
+        btn.addEventListener('click', (e) => changeView(e.target.dataset.view));
     });
 
-    if (todayBtn) {
-        todayBtn.addEventListener('click', () => {
-            console.log('Bouton aujourd\'hui cliqué');
-            try {
-                calendar.today();
-                console.log('Retour à aujourd\'hui effectué');
-                updateCalendarTitle();
-            } catch (error) {
-                console.error('Erreur lors du retour à aujourd\'hui:', error);
-            }
-        });
-    }
+    // Reload when nav bar filters change
+    document.addEventListener('tw-filter-change', () => loadTasks());
 
-    // Changement de vue
-    document.querySelectorAll('.view-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const view = e.target.dataset.view;
-            changeView(view);
-        });
-    });
-
-    // Actualiser
-    document.getElementById('refresh-btn').addEventListener('click', () => {
-        loadTasks();
-    });
-
-    // Filtres
-    document.getElementById('filter-pool').addEventListener('change', (e) => {
-        currentFilter.pool = e.target.value;
-        filterAndDisplayTasks();
-    });
-
-    document.getElementById('sort-tasks').addEventListener('change', (e) => {
-        currentFilter.sort = e.target.value;
-        filterAndDisplayTasks();
-    });
-
-    // Evenements liées à tui-calendar
-    calendar.on('selectDateTime', handleSelectDateTimeEvent);
-
+    // TUI calendar events
+    calendar.on('selectDateTime',    handleSelectDateTimeEvent);
     calendar.on('beforeCreateEvent', handleBeforeCreateEvent);
-
     calendar.on('beforeUpdateEvent', handleBeforeUpdateEvent);
-
-    // Écouter la suppression
     calendar.on('beforeDeleteEvent', handleBeforeDeleteEvent);
+    calendar.on('clickEvent', ({ event }) => showEventModal(event));
+
+    // External drag-drop: native DOM events on the calendar container
+    // (calendar.on('drop') does not fire for elements dragged in from outside TUI)
+    const calEl = document.getElementById('calendar');
+    calEl.addEventListener('dragover', e => e.preventDefault());
+    calEl.addEventListener('drop', e => {
+        e.preventDefault();
+        const raw = e.dataTransfer?.getData('taskData');
+        if (!raw || !selectedTaskData) return;
+
+        // Walk up from the drop target looking for a date hint TUI puts on cells
+        let dateStr = null;
+        let el = document.elementFromPoint(e.clientX, e.clientY);
+        while (el && el !== calEl) {
+            if (el.dataset.date) { dateStr = el.dataset.date; break; }
+            el = el.parentElement;
+        }
+
+        // Fallback: use the visible week/day range start at 09:00
+        if (!dateStr) {
+            const rs = calendar.getDateRangeStart();
+            const d  = rs?.d ? new Date(rs.d) : (rs instanceof Date ? rs : new Date());
+            dateStr  = d.toISOString().slice(0, 10);
+        }
+
+        const start = new Date(dateStr + 'T09:00:00');
+        const dur   = parseEstTime(selectedTaskData.sched_duration) || 60;
+        const end   = new Date(start.getTime() + dur * 60000);
+
+        tempEventData = {
+            id: selectedTaskData.uuid,
+            start, end,
+            title: selectedTaskData.description,
+            isAllday: false
+        };
+        handleBeforeCreateEvent({ calendarId: 'scheduled' });
+    });
 
 }
 
@@ -180,7 +213,7 @@ function handleSelectDateTimeEvent(eventInfo) {
     // If a task is selected, adjust the end date based on task duration
     if (selectedTaskData) {
         // Parse the task duration
-        const duration = parseEstTime(selectedTaskData.estTime);
+        const duration = parseEstTime(selectedTaskData.sched_duration);
         
         if (duration) {
             // Calculate new end date based on task duration
@@ -247,7 +280,7 @@ async function handleBeforeCreateEvent(eventObj) {
         const newTaskData = {
             description: newEvent.title,
             scheduled: newEvent.start ? (newEvent.start instanceof Date ? DateFromISOtoTW(newEvent.start.toISOString()) : DateFromISOtoTW(newEvent.start)) : null,
-            estTime: calculateDurationFromEvent(newEvent)
+            sched_duration: calculateDurationFromEvent(newEvent)
         };
 
         const result = await addTaskToBackend(newTaskData);
@@ -287,8 +320,7 @@ async function handleBeforeCreateEvent(eventObj) {
         selectedTaskData = null;
         tempEventData = null;
 
-        // Mettre à jour le compteur de tâches
-        updateTaskCount();
+        applyFiltersAndDisplay();
     }
 }
 
@@ -333,11 +365,11 @@ async function handleBeforeUpdateEvent({ event, changes }) {
                 start: finalStartDate,
                 end: finalEndDate
             });
-            modifiedTaskData.estTime = duration;
+            modifiedTaskData.sched_duration = duration;
             console.log("Calculated duration:", duration);
         } else if (finalStartDate) {
             // If we have a start date but no end date, use default duration
-            modifiedTaskData.estTime = 'PT30M';
+            modifiedTaskData.sched_duration = 'PT30M';
             console.log("Using default duration PT30M (no end date available)");
         }
 
@@ -416,58 +448,43 @@ async function handleBeforeDeleteEvent(event) {
 /**
  * Chargement des tâches depuis l'API 
  */
-function loadTasks() {
-    console.log('Chargement des tâches...');
-    // Charger les tâches non planifiées
-    fetch('/api/tasks')
-        .then(response => response.json())
-        .then(data => {
-            console.log('Tâches non planifiées reçues:', data);
-            if (data.success) {
-                // Réinitialiser allTasks avant d'ajouter les nouvelles tâches
-                allTasks = [];
-                const initialTasks = data.tasks || [];
-                unplannedTasks = initialTasks.filter(task => !task.scheduled);
-                console.log(`${unplannedTasks.length} tâches non planifiées trouvées`);
-                filterAndDisplayTasks();
+let dueTasks = [];  // tasks with due date but no scheduled date
 
-                // Charger les tâches planifiées
-                console.log('Chargement des tâches planifiées...');
-                return fetch('/api/tasks/planned');
-            } else {
-                throw new Error(data.error || 'Failed to load tasks');
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log('Tâches planifiées reçues:', data);
-            if (data.success) {
-                const plannedTasks = data.data || [];
-                console.log(`${plannedTasks.length} tâches planifiées trouvées`);
-                
-                // Afficher les détails des tâches planifiées pour le débogage
-                plannedTasks.forEach((task, index) => {
-                    console.log(`Tâche planifiée ${index + 1}:`, {
-                        description: task.description,
-                        scheduled: task.scheduled,
-                        due: task.due,
-                        estTime: task.estTime,
-                        pool: task.pool
-                    });
-                });
-                
-                // Mettre à jour allTasks avec les tâches non planifiées et planifiées
-                allTasks = [...unplannedTasks, ...plannedTasks];
-                console.log(`Total des tâches chargées: ${allTasks.length} (${unplannedTasks.length} non planifiées, ${plannedTasks.length} planifiées)`);
-                processTasksForCalendar();
-            } else {
-                console.error('Erreur lors du chargement des tâches planifiées:', data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Erreur lors du chargement des tâches:', error);
-            showError('Failed to load tasks: ' + error.message);
-        });
+function loadTasks() {
+    // Show cached tasks immediately while fetch is in flight (avoids "Loading tasks..." flash)
+    const cached = sessionStorage.getItem('tw-tasks-cache');
+    if (cached) {
+        try {
+            const tasks = JSON.parse(cached);
+            unplannedTasks = tasks.filter(t => !t.scheduled);
+            allTasks = unplannedTasks;
+            applyFiltersAndDisplay();
+        } catch (e) { /* ignore stale cache */ }
+    }
+
+    const params   = window.twNav ? window.twNav.stateToParams() : 'status=pending';
+    const navState = window.twNav ? window.twNav.getState() : {};
+    const statusParam = 'status=' + encodeURIComponent((navState.statuses || ['pending']).join(','));
+    Promise.all([
+        fetch('/api/tasks?' + params).then(r => r.json()),
+        fetch('/api/tasks/planned?' + statusParam).then(r => r.json()),
+        fetch('/api/tasks/due?'     + statusParam).then(r => r.json()),
+    ])
+    .then(([data, plannedData, dueData]) => {
+        if (!data.success) throw new Error(data.error || 'Failed to load tasks');
+
+        const allFetched   = data.tasks || [];
+        const plannedTasks = plannedData.success ? (plannedData.data || []) : [];
+        dueTasks           = dueData.success      ? (dueData.data  || []) : [];
+
+        // Sidebar: fetched tasks without a scheduled date
+        unplannedTasks = allFetched.filter(task => !task.scheduled);
+        allTasks = [...unplannedTasks, ...plannedTasks];
+
+        applyFiltersAndDisplay();
+        processTasksForCalendar();
+    })
+    .catch(error => showError('Failed to load tasks: ' + error.message));
 }
 
 /**
@@ -490,13 +507,17 @@ function processTasksForCalendar() {
     const events = [];
     scheduledTasks.forEach(task => {
         try {
-            const event = createCalendarEvent(task, task.scheduled);
-            if (event) {
-                events.push(event);
-            }
-        } catch (e) {
-            console.error('Erreur lors de la création de l\'événement pour la tâche:', task, e);
-        }
+            const event = createCalendarEvent(task, task.scheduled, 'scheduled');
+            if (event) events.push(event);
+        } catch (e) {}
+    });
+
+    // Due tasks (no scheduled date) → all-day events in 'due' calendar
+    dueTasks.forEach(task => {
+        try {
+            const event = createDueEvent(task);
+            if (event) events.push(event);
+        } catch (e) {}
     });
     
     // Effacer les événements existants et ajouter les nouveaux
@@ -507,6 +528,7 @@ function processTasksForCalendar() {
     
     // Mettre à jour l'affichage
     calendar.render();
+    setTimeout(hookCalScrollIndicators, 150);
 }
 
 /**
@@ -517,18 +539,15 @@ function createCalendarEvent(task, scheduledDate) {
     let start;
     try {
         // Convertir le format 20251220T120000Z en 2025-12-20T12:00:00Z pour une meilleure compatibilité
+        // Strip Z so the date is treated as local time, not UTC.
+        // TW stores midnight-UTC for date-only entries; interpreting as UTC
+        // shifts them to the previous day in western timezones causing 2-day spans.
         const isoDate = scheduledDate.replace(
             /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
-            '$1-$2-$3T$4:$5:$6Z'
+            '$1-$2-$3T$4:$5:$6'
         );
         start = new Date(isoDate);
-        
-        if (isNaN(start.getTime())) {
-            console.error('Date de planification invalide:', scheduledDate, 'formaté en:', isoDate, 'pour la tâche:', task);
-            return null;
-        } else {
-            console.log('Date convertie avec succès:', scheduledDate, '->', start);
-        }
+        if (isNaN(start.getTime())) return null;
     } catch (e) {
         console.error('Erreur lors de la création de la date:', e, 'pour la tâche:', task);
         return null;
@@ -536,9 +555,9 @@ function createCalendarEvent(task, scheduledDate) {
     
     // Définir une durée par défaut si nécessaire
     let duration;
-    if (task.estTime && task.estTime.startsWith('PT')) {
+    if (task.sched_duration && task.sched_duration.startsWith('PT')) {
         // Format ISO 8601 pour la durée (ex: PT1H pour 1 heure, PT30M pour 30 minutes)
-        const durationMatch = task.estTime.match(/PT(\d+H)?(\d+M)?/);
+        const durationMatch = task.sched_duration.match(/PT(\d+H)?(\d+M)?/);
         let hours = 0, minutes = 0;
         if (durationMatch) {
             if (durationMatch[1]) hours = parseInt(durationMatch[1]);
@@ -555,7 +574,7 @@ function createCalendarEvent(task, scheduledDate) {
     const pool = (task.pool || 'scheduled').toLowerCase();
     const calendarId = ['pro', 'perso'].includes(pool) ? pool : 'scheduled';
 
-    return {
+    const event = {
         id: task.uuid,
         calendarId: calendarId,
         title: task.description,
@@ -564,27 +583,136 @@ function createCalendarEvent(task, scheduledDate) {
         isReadOnly: false,
         raw: task
     };
+    // Status-based color: completed → grey, deleted → purple
+    if (task.status === 'completed') {
+        event.backgroundColor = '#78909c';
+        event.borderColor     = '#546e7a';
+        event.color           = '#fff';
+    } else if (task.status === 'deleted') {
+        event.backgroundColor = '#ab47bc';
+        event.borderColor     = '#8e24aa';
+        event.color           = '#fff';
+    }
+    return event;
 }
 
-/**
- * TaskActionHandler pour calendar-planner.js
- */
+function createDueEvent(task) {
+    const rawDate = task.due;
+    if (!rawDate) return null;
+
+    const m = rawDate.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+    if (!m) return null;
+    const dateStr = `${m[1]}-${m[2]}-${m[3]}`;  // '2026-04-14' — no timezone ambiguity
+
+    // If due_duration is set, show as a timed block at local midnight on that date
+    const durStr = task.due_duration;
+    if (durStr && durStr.startsWith('PT')) {
+        const dm = durStr.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+        const mins = (dm ? (parseInt(dm[1] || 0) * 60 + parseInt(dm[2] || 0)) : 0) || 60;
+        const start = new Date(dateStr + 'T00:00:00');
+        return {
+            id: task.uuid + '_due',
+            calendarId: 'due',
+            title: '⚑ ' + task.description,
+            start,
+            end: new Date(start.getTime() + mins * 60000),
+            isReadOnly: true,
+            raw: task
+        };
+    }
+
+    // All-day: use plain date strings so TUI Calendar owns the timezone handling
+    const dueColors = task.status === 'completed' ? { backgroundColor: '#78909c', borderColor: '#546e7a', color: '#fff' }
+                    : task.status === 'deleted'   ? { backgroundColor: '#ab47bc', borderColor: '#8e24aa', color: '#fff' }
+                    : {};
+    return {
+        id: task.uuid + '_due',
+        calendarId: 'due',
+        title: '⚑ ' + task.description,
+        start: dateStr,
+        end: dateStr,
+        ...dueColors,
+        isAllday: true,
+        isReadOnly: true,
+        raw: task
+    };
+}
+
 class CalendarTaskActionHandler extends TaskActionHandler {
-    performTaskAction(taskUuid, action) {
-        console.log('Action performed:', action, 'on task:', taskUuid);
-    }
-    
-    openEditModal(task) {
-        console.log('Edit modal opened for task:', task);
-    }
-    
-    confirmDelete(taskUuid) {
-        console.log('Delete confirmed for task:', taskUuid);
+    constructor() {
+        super({
+            onTaskUpdate: () => loadTasks(),
+            onTaskDelete: () => loadTasks(),
+            showNotification: (msg, type) => {
+                document.dispatchEvent(new CustomEvent('tw-show-notification',
+                    { detail: { message: msg, type } }));
+            }
+        });
     }
 }
 
+// ── Event detail modal ────────────────────────────────────────────────────────
+
+function showEventModal(calEvent) {
+    const task   = calEvent.raw || {};
+    const modal  = document.getElementById('task-detail-modal');
+    if (!modal) return;
+
+    document.getElementById('modal-task-title').textContent =
+        task.description || calEvent.title || 'Task';
+
+    const fmt = (twDate) => {
+        const m = (twDate || '').match(/^(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?/);
+        if (!m) return twDate;
+        return m[4] ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : `${m[3]}/${m[2]}/${m[1]}`;
+    };
+
+    const rows = [];
+    if (task.status && task.status !== 'pending')
+        rows.push(`<tr><th>Status</th><td><em>${task.status}</em></td></tr>`);
+    if (task.project)  rows.push(`<tr><th>Project</th><td>${task.project}</td></tr>`);
+    if (task.priority) {
+        const label = { H: 'High', M: 'Medium', L: 'Low' }[task.priority] || task.priority;
+        rows.push(`<tr><th>Priority</th><td>${label}</td></tr>`);
+    }
+    if (task.due)       rows.push(`<tr><th>Due</th><td>${fmt(task.due)}</td></tr>`);
+    if (task.scheduled) rows.push(`<tr><th>Scheduled</th><td>${fmt(task.scheduled)}</td></tr>`);
+    if (task.sched_duration) rows.push(`<tr><th>Duration</th><td>${task.sched_duration}</td></tr>`);
+    if (task.tags && task.tags.length)
+        rows.push(`<tr><th>Tags</th><td>${task.tags.map(t => `<span class="card-tag">${t}</span>`).join(' ')}</td></tr>`);
+    if (task.urgency != null)
+        rows.push(`<tr><th>Urgency</th><td>${Number(task.urgency).toFixed(1)}</td></tr>`);
+
+    document.getElementById('modal-task-body').innerHTML = rows.length
+        ? `<table class="task-detail-table">${rows.join('')}</table>`
+        : '<em>No details available.</em>';
+
+    // Unschedule only makes sense for scheduled (non-readonly) events
+    const unschedBtn = document.getElementById('modal-unschedule-btn');
+    unschedBtn.style.display = calEvent.isReadOnly ? 'none' : '';
+
+    const close = () => modal.classList.remove('show');
+
+    unschedBtn.onclick = async () => {
+        const r = await modifyTaskInBackend(task.uuid, { scheduled: null });
+        if (r.success) { close(); loadTasks(); }
+    };
+    document.getElementById('modal-done-btn').onclick = async () => {
+        try {
+            const r = await fetch(`/api/task/${task.uuid}/done`, { method: 'POST' });
+            const d = await r.json();
+            if (d.success) { close(); loadTasks(); }
+        } catch (e) {}
+    };
+    document.getElementById('modal-close-btn').onclick  = close;
+    document.getElementById('modal-cancel-btn').onclick = close;
+    modal.onclick = (e) => { if (e.target === modal) close(); };
+
+    modal.classList.add('show');
+}
+
 /**
- * Configuration de la sélection des tâches 
+ * Configuration de la sélection des tâches
  */
 function handleTaskCardClick(cardElement) {
     console.log('Evenement declenché !');
@@ -617,39 +745,192 @@ function getSelectedTask() {
     return selectedTaskData;
 }
 
-/**
- * Filtrer et afficher les tâches non planifiées 
- */
-function filterAndDisplayTasks() {
-    let filteredTasks = [...unplannedTasks];
+// ── Sync dialog ───────────────────────────────────────────────────────────────
 
-    // Filtrer par pool
-    if (currentFilter.pool !== 'all') {
-        filteredTasks = filteredTasks.filter(task => 
-            (task.pool || 'pro') === currentFilter.pool
-        );
+function openSyncDialog() {
+    const dialog   = document.getElementById('sync-dialog');
+    const btn      = document.getElementById('sync-now-btn');
+    const output   = document.getElementById('sync-output');
+    const method   = document.getElementById('sync-method');
+    const closeBtn = document.getElementById('sync-dialog-close');
+    if (!dialog) return;
+
+    output.style.display = 'none';
+    output.textContent   = '';
+    btn.disabled         = false;
+    btn.textContent      = 'Sync Now';
+
+    fetch('/api/sync/info').then(r => r.json())
+        .then(d => { method.textContent = `Method: ${d.method}`; })
+        .catch(() => { method.textContent = ''; });
+
+    dialog.style.display = 'flex';
+    const close = () => { dialog.style.display = 'none'; };
+    closeBtn.onclick = close;
+    dialog.onclick   = (e) => { if (e.target === dialog) close(); };
+
+    btn.onclick = () => {
+        btn.disabled    = true;
+        btn.textContent = 'Syncing…';
+        output.style.display = 'none';
+        fetch('/api/sync', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                const text = data.output || (data.success ? 'Sync complete.' : 'Sync failed.');
+                output.textContent   = text;
+                output.style.display = 'block';
+                btn.textContent      = data.success ? 'Sync Now' : 'Retry';
+                btn.disabled         = false;
+                if (data.success) { loadTasks(); window.twPollSyncStatus?.(); }
+            })
+            .catch(err => {
+                output.textContent   = 'Error: ' + err;
+                output.style.display = 'block';
+                btn.textContent      = 'Retry';
+                btn.disabled         = false;
+            });
+    };
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+function showCalNotification(message, type = 'info') {
+    const el  = document.getElementById('notification');
+    const txt = document.getElementById('notif-text');
+    if (!el) return;
+    if (txt) txt.textContent = message; else el.textContent = message;
+    el.className = `notification ${type} show`;
+    const timeout = (window.twNotifTimeout != null) ? window.twNotifTimeout : 3000;
+    clearTimeout(showCalNotification._t);
+    if (timeout > 0)
+        showCalNotification._t = setTimeout(() => el.classList.remove('show'), timeout);
+}
+
+// ── Sidebar sort ──────────────────────────────────────────────────────────────
+
+const SIDEBAR_SORT_FIELDS = [
+    { value: 'urgency',     label: 'Urgency (default)' },
+    { value: 'priority',    label: 'Priority' },
+    { value: 'due',         label: 'Due date' },
+    { value: 'description', label: 'Description' },
+    { value: 'project',     label: 'Project' },
+    { value: 'entry',       label: 'Created' },
+    { value: 'modified',    label: 'Modified' },
+    { value: 'start',       label: 'Started' },
+    { value: 'scheduled',   label: 'Scheduled' },
+    { value: 'wait',        label: 'Wait date' },
+    { value: 'id',          label: 'ID' },
+    { value: 'tags',        label: 'Tags' },
+];
+
+function sortUnplanned(tasks) {
+    const field = localStorage.getItem('tw-sort-field') || 'urgency';
+    const rev   = localStorage.getItem('tw-sort-reverse') === 'true' ? -1 : 1;
+    if (field === 'urgency') return rev === 1 ? tasks : [...tasks].reverse();
+    const PRI = { H: 3, M: 2, L: 1 };
+    return [...tasks].sort((a, b) => {
+        let av = a[field], bv = b[field];
+        if (field === 'priority') { av = PRI[av] || 0; bv = PRI[bv] || 0; }
+        else if (field === 'tags') { av = (av || []).join(','); bv = (bv || []).join(','); }
+        av = av ?? ''; bv = bv ?? '';
+        if (av < bv) return -1 * rev;
+        if (av > bv) return  1 * rev;
+        return 0;
+    });
+}
+
+function initSidebarControls() {
+    const cardBtn  = document.getElementById('cal-view-card');
+    const listBtn  = document.getElementById('cal-view-list');
+    const container = document.getElementById('unplanned-tasks');
+
+    const setView = (mode) => {
+        localStorage.setItem('tw-view-mode', mode);
+        cardBtn.classList.toggle('active', mode === 'card');
+        listBtn.classList.toggle('active', mode === 'list');
+        if (container) container.classList.toggle('list-view', mode === 'list');
+    };
+    setView(localStorage.getItem('tw-view-mode') || 'card');
+    cardBtn?.addEventListener('click', () => setView('card'));
+    listBtn?.addEventListener('click', () => setView('list'));
+
+    // Expand/collapse on card click (mirrors main.js behaviour)
+    if (container) {
+        container.addEventListener('click', (e) => {
+            if (e.target.closest('[data-task-action]')) return;
+            const card = e.target.closest('.task-card');
+            if (!card) return;
+            const mode = localStorage.getItem('tw-view-mode') || 'card';
+            if (mode === 'list') card.classList.toggle('expanded');
+            else card.classList.toggle('collapsed');
+        });
     }
 
-    // Trier
-    filteredTasks.sort((a, b) => {
-        switch (currentFilter.sort) {
-            case 'urgency':
-                return (b.urgency || 0) - (a.urgency || 0);
-            case 'due':
-                if (!a.due && !b.due) return 0;
-                if (!a.due) return 1;
-                if (!b.due) return -1;
-                return new Date(a.due) - new Date(b.due);
-            case 'duration':
-                const durationA = parseEstTime(a.estTime) || 0;
-                const durationB = parseEstTime(b.estTime) || 0;
-                return durationB - durationA;
-            default:
-                return 0;
+    // Sort popup
+    const sortBtn    = document.getElementById('cal-sort-btn');
+    const sortPopup  = document.getElementById('cal-sort-popup');
+    const sortFields = document.getElementById('cal-sort-fields');
+    const revBox     = document.getElementById('cal-sort-reverse');
+    if (!sortBtn || !sortPopup || !sortFields || !revBox) return;
+
+    const curField = localStorage.getItem('tw-sort-field') || 'urgency';
+    sortFields.innerHTML = SIDEBAR_SORT_FIELDS.map(f =>
+        `<label><input type="radio" name="cal-sort" value="${f.value}"${f.value === curField ? ' checked' : ''}> ${f.label}</label>`
+    ).join('');
+    revBox.checked = localStorage.getItem('tw-sort-reverse') === 'true';
+
+    const updateSortBtn = () => {
+        const field = localStorage.getItem('tw-sort-field') || 'urgency';
+        const rev   = localStorage.getItem('tw-sort-reverse') === 'true';
+        const isDefault = field === 'urgency' && !rev;
+        sortBtn.classList.toggle('sort-active', !isDefault);
+        const label = SIDEBAR_SORT_FIELDS.find(f => f.value === field)?.label || field;
+        sortBtn.title = isDefault ? 'Sort' : `Sort: ${label}${rev ? ' ↑' : ' ↓'}`;
+    };
+    updateSortBtn();
+
+    sortBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sortPopup.style.display = sortPopup.style.display === 'none' ? 'block' : 'none';
+    });
+    sortFields.addEventListener('change', (e) => {
+        if (e.target.name === 'cal-sort') {
+            localStorage.setItem('tw-sort-field', e.target.value);
+            updateSortBtn();
+            applyFiltersAndDisplay();
         }
     });
+    revBox.addEventListener('change', () => {
+        localStorage.setItem('tw-sort-reverse', revBox.checked);
+        updateSortBtn();
+        applyFiltersAndDisplay();
+    });
+    document.addEventListener('click', () => { sortPopup.style.display = 'none'; });
+    sortPopup.addEventListener('click', (e) => e.stopPropagation());
+}
 
-    displayUnplannedTasks(filteredTasks);
+// ── Filter + display ──────────────────────────────────────────────────────────
+
+/**
+ * Filtrer et afficher les tâches non planifiées
+ */
+function applyFiltersAndDisplay() {
+    const state    = window.twNav ? window.twNav.getState() : {};
+    const filter   = (state.filter   || '').trim().toLowerCase();
+    const priority = (state.priority || '').trim().toLowerCase();
+    const project  = (state.project  || '').trim().toLowerCase();
+    const tags     = (state.tags     || '').split(',').map(t => t.trim()).filter(Boolean);
+
+    const filtered = unplannedTasks.filter(task => {
+        if (filter   && !(task.description || '').toLowerCase().includes(filter))   return false;
+        if (priority && !String(task.priority || '').toLowerCase().includes(priority)) return false;
+        if (project  && !(task.project      || '').toLowerCase().includes(project)) return false;
+        if (tags.length && !tags.every(t => (task.tags || []).includes(t)))         return false;
+        return true;
+    });
+
+    if (window.twNav) window.twNav.setCount(filtered.length, unplannedTasks.length);
+    displayUnplannedTasks(sortUnplanned(filtered));
 }
 
 /**
@@ -657,9 +938,6 @@ function filterAndDisplayTasks() {
  */
 function displayUnplannedTasks(tasks) {
     const container = document.getElementById('unplanned-tasks');
-    const countEl = document.getElementById('task-count');
-
-    countEl.textContent = `${tasks.length} task${tasks.length !== 1 ? 's' : ''}`;
 
     if (tasks.length === 0) {
         container.innerHTML = `
@@ -674,129 +952,141 @@ function displayUnplannedTasks(tasks) {
     // Vide le conteneur
     container.innerHTML = '';
 
-    // Crée et ajoute chaque carte de tâche
     tasks.forEach(task => {
-        const taskCard = taskCardManager.createTaskCard(task, 'minimal');
+        const taskCard = taskCardManager.createTaskCard(task);
+        taskCard.draggable = true;
+        taskCard.addEventListener('dragstart', (e) => {
+            selectedTaskData = task;
+            selectedTaskCard = taskCard;
+            e.dataTransfer.setData('taskData', JSON.stringify(task));
+            e.dataTransfer.effectAllowed = 'move';
+            taskCard.style.opacity = '0.5';
+        });
+        taskCard.addEventListener('dragend', () => { taskCard.style.opacity = ''; });
         container.appendChild(taskCard);
     });
 }
-
-/**
- * Met à jour le compteur de tâches sans recharger depuis le serveur
- */
-function updateTaskCount() {
-    const container = document.getElementById('unplanned-tasks');
-    const countEl = document.getElementById('task-count');
-
-    // Compter les taskCards restantes
-    const remainingCards = container.querySelectorAll('.task-card').length;
-
-    countEl.textContent = `${remainingCards} task${remainingCards !== 1 ? 's' : ''}`;
-
-    if (remainingCards === 0) {
-        container.innerHTML = `
-            <div class="empty-message">
-                <span class="icon">✅</span>
-                <p>No tasks to schedule</p>
-            </div>
-        `;
-    }
-}
-
 
 // La fonction createTaskCard est maintenant gérée par taskCardManager
 /**
  * Changement de vue du calendrier 
  */
+// ── Off-screen event indicators (week/day views) ──────────────────────────────
+
+let _scrollCleanup = null;
+
+function createScrollIndicators() {
+    const container = document.querySelector('.calendar-container');
+    if (!container || document.getElementById('cal-scroll-top')) return;
+    container.insertAdjacentHTML('beforeend',
+        '<div id="cal-scroll-top"    class="cal-scroll-indicator" style="display:none">▲</div>' +
+        '<div id="cal-scroll-bottom" class="cal-scroll-indicator" style="display:none">▼</div>'
+    );
+}
+
+function hookCalScrollIndicators() {
+    if (_scrollCleanup) { _scrollCleanup(); _scrollCleanup = null; }
+    const topEl = document.getElementById('cal-scroll-top');
+    const botEl = document.getElementById('cal-scroll-bottom');
+    if (!topEl || !botEl) return;
+
+    if (calendar.getViewName() === 'month') {
+        topEl.style.display = botEl.style.display = 'none';
+        return;
+    }
+
+    // Find TUI Calendar's scrollable time-grid container
+    const calEl = document.getElementById('calendar');
+    const scrollEl = calEl && [...calEl.querySelectorAll('div')].find(el => {
+        const ov = getComputedStyle(el).overflowY;
+        return (ov === 'auto' || ov === 'scroll') && el.scrollHeight > el.clientHeight + 10;
+    });
+    if (!scrollEl) return;
+
+    const update = () => {
+        topEl.style.display = scrollEl.scrollTop > 5 ? '' : 'none';
+        botEl.style.display =
+            scrollEl.scrollTop + scrollEl.clientHeight < scrollEl.scrollHeight - 5 ? '' : 'none';
+    };
+    scrollEl.addEventListener('scroll', update, { passive: true });
+    update();
+    _scrollCleanup = () => scrollEl.removeEventListener('scroll', update);
+}
+
+function fitCalendarHeight() {
+    const container = document.querySelector('.calendar-container');
+    const calEl     = document.getElementById('calendar');
+    if (!container || !calEl) return;
+    const h = container.clientHeight;
+    if (h > 0) calEl.style.height = h + 'px';
+}
+
 function changeView(view) {
     calendar.changeView(view);
-    
-    // Mettre à jour les boutons actifs
-    document.querySelectorAll('.view-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.dataset.view === view) {
-            btn.classList.add('active');
-        }
+    fitCalendarHeight();
+    setTimeout(hookCalScrollIndicators, 150);
+    document.querySelectorAll('.view-btn[data-view]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === view);
     });
-
     updateCalendarTitle();
 }
 
-/**
- * Mide à jour du titre du calendrier 
- */
 function updateCalendarTitle() {
     const titleEl = document.getElementById('calendar-title');
-    
-    try {
-        const dateRange = calendar.getDateRangeStart();
-        const view = calendar.getViewName();
-        
-        // Extraire la date de l'objet dateRange
-        let startDate;
-        if (dateRange && dateRange.d) {
-            // Si dateRange a une propriété 'd' (cas de Toast UI Calendar)
-            startDate = new Date(dateRange.d);
-        } else if (dateRange instanceof Date || (dateRange && dateRange.getTime)) {
-            // Si c'est déjà un objet Date
-            startDate = new Date(dateRange);
-        } else {
-            // Fallback sur la date actuelle
-            startDate = new Date();
-        }
-        
-        let title = '';
-        
-        if (view === 'month') {
-            // Pour la vue mois, on prend le 1er jour du mois de la première semaine complète
-            // pour éviter d'afficher le mois précédent
-            let firstDayOfMonth = new Date(startDate);
-            
-            // Si on n'est pas le 1er du mois, on passe au mois suivant
-            if (firstDayOfMonth.getDate() > 1) {
-                firstDayOfMonth.setMonth(firstDayOfMonth.getMonth() + 1, 1);
-            }
-            
-            title = firstDayOfMonth.toLocaleDateString(undefined, { 
-                month: 'long', 
-                year: 'numeric' 
-            });
-        } else if (view === 'week') {
-            let endDateObj = calendar.getDateRangeEnd();
-            let endDate = endDateObj && (endDateObj.d ? new Date(endDateObj.d) : new Date(endDateObj));
-            
-            if (!endDate || isNaN(endDate.getTime())) {
-                endDate = new Date(startDate);
-                endDate.setDate(endDate.getDate() + 6); // Ajoute 6 jours pour avoir une semaine complète
-            }
-            
-            title = `${startDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
-        } else {
-            // Vue jour
-            title = startDate.toLocaleDateString(undefined, { 
-                weekday: 'long', 
-                day: 'numeric', 
-                month: 'long', 
-                year: 'numeric' 
-            });
-        }
+    if (!titleEl) return;
 
-        titleEl.textContent = title.charAt(0).toUpperCase() + title.slice(1);
-        console.log('Titre mis à jour:', titleEl.textContent);
-    } catch (error) {
-        console.error('Erreur lors de la mise à jour du titre:', error);
+    // Today button: active only when today falls within the visible range
+    const todayBtn = document.getElementById('today-btn');
+    if (todayBtn) {
+        const now  = new Date();
+        const rs   = calendar.getDateRangeStart();
+        const re   = calendar.getDateRangeEnd();
+        const s    = rs?.d ? new Date(rs.d) : (rs instanceof Date ? rs : null);
+        const e    = re?.d ? new Date(re.d) : (re instanceof Date ? re : null);
+        const inRange = s && e ? (s <= now && now <= new Date(e.getTime() + 86400000 - 1)) : true;
+        todayBtn.classList.toggle('active', inRange);
     }
+
+    const toDate = (raw) => {
+        if (!raw) return null;
+        if (raw.d) return new Date(raw.d);
+        if (raw instanceof Date) return raw;
+        return null;
+    };
+
+    const fmt = (d, opts) => d.toLocaleDateString('en-GB', opts);
+    const MON_YEAR = { month: 'short', year: 'numeric' };
+    const DAY_MON  = { day: 'numeric', month: 'short' };
+    const FULL     = { day: 'numeric', month: 'short', year: 'numeric' };
+
+    const view  = calendar.getViewName();
+    const start = toDate(calendar.getDateRangeStart()) || new Date();
+    const end   = toDate(calendar.getDateRangeEnd());
+
+    let title;
+    if (view === 'month') {
+        // getDateRangeStart may land in prev month — nudge to first visible month day
+        const d = new Date(start);
+        if (d.getDate() > 1) d.setMonth(d.getMonth() + 1, 1);
+        title = fmt(d, MON_YEAR);
+    } else if (view === 'week' && end) {
+        title = `${fmt(start, DAY_MON)} – ${fmt(end, FULL)}`;
+    } else {
+        title = fmt(start, FULL);
+    }
+
+    titleEl.textContent = title;
 }
 
 /**
  * Fonctions utilitaires 
  */
-function parseEstTime(estTime) {
-    if (!estTime) return null;
+function parseEstTime(sched_duration) {
+    if (!sched_duration) return null;
     
     // Handle ISO 8601 duration format (PT2H30M) that TaskWarrior uses
-    if (estTime.startsWith('PT')) {
-        const match = estTime.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (sched_duration.startsWith('PT')) {
+        const match = sched_duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
         if (match) {
             const hours = parseInt(match[1] || 0);
             const minutes = parseInt(match[2] || 0);
@@ -807,7 +1097,7 @@ function parseEstTime(estTime) {
     }
     
     // Fallback for old format: "1h30min" ou "30min" ou "1h"
-    const match = estTime.match(/(\d+)h|(\d+)min/g);
+    const match = sched_duration.match(/(\d+)h|(\d+)min/g);
     if (!match) return null;
 
     let minutes = 0;
