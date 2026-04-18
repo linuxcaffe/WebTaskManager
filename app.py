@@ -4,13 +4,16 @@ TaskWarrior Web UI - Backend Server
 A lightweight Flask server to interface with TaskWarrior commands
 """
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_cors import CORS
 import subprocess
 import json
 import os
 import re
 import time
+import threading
+from queue import Queue, Empty
+from pathlib import Path
 from datetime import datetime
 from config import DEVELOPER_MODE, DEBUG_FILE
 try:
@@ -55,6 +58,45 @@ def log_command(args):
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
+# ── Hook prompt system ────────────────────────────────────────────────────────
+_PROMPT_DIR = Path('/tmp/tw-web-prompts')
+_PROMPT_DIR.mkdir(exist_ok=True)
+
+_sse_clients: dict[int, Queue] = {}
+_sse_lock = threading.Lock()
+
+def _sse_broadcast(event: dict):
+    """Push an event to all connected SSE clients."""
+    msg = f"data: {json.dumps(event)}\n\n"
+    with _sse_lock:
+        for q in list(_sse_clients.values()):
+            try:
+                q.put_nowait(msg)
+            except Exception:
+                pass
+
+def _prompt_watcher():
+    """Background thread: watch for .prompt files written by hooks."""
+    seen: set[str] = set()
+    while True:
+        try:
+            for pf in sorted(_PROMPT_DIR.glob('*.prompt')):
+                stem = pf.stem
+                if stem not in seen:
+                    seen.add(stem)
+                    try:
+                        _sse_broadcast(json.loads(pf.read_text()))
+                    except Exception:
+                        pass
+            # Prune stale entries no longer on disk
+            seen &= {f.stem for f in _PROMPT_DIR.glob('*.prompt')}
+        except Exception:
+            pass
+        time.sleep(0.3)
+
+_watcher_thread = threading.Thread(target=_prompt_watcher, daemon=True, name='prompt-watcher')
+_watcher_thread.start()
+
 def _get_recurrence_filter():
     """Return the TW filter string for the 'recurring' status button.
     Reads recurrence.field from tw-web.rc (via task _show):
@@ -88,12 +130,14 @@ def run_task_command(args):
     args must be a list, e.g. ['task', 'status:pending', 'export'].
     shell=True is intentionally not used.
 
-    recurrence=no and confirmation=no are set in tw-web.rc (loaded at startup),
-    so no command-line rc overrides are needed here.
+    rc.confirmation=no is injected per-call (not via tw-web.rc) so it only
+    applies to web-context commands, not CLI task/tw invocations.
     """
     try:
         if args[0] != 'task':
             args = ['task'] + args
+        # Inject web-only rc overrides immediately after 'task'
+        args = [args[0], 'rc.confirmation=no'] + args[1:]
 
         log_command(args)
 
@@ -151,6 +195,13 @@ def run_command(args):
     except Exception as e:
         return {'success': False, 'stdout': '', 'stderr': str(e), 'returncode': -1}
 
+@app.route('/api/debug', methods=['POST'])
+def api_debug():
+    """Temporary JS error logging endpoint"""
+    data = request.get_json(silent=True) or {}
+    print(f"[JS-DEBUG] {data.get('msg', '(no message)')}", flush=True)
+    return jsonify({'ok': True})
+
 @app.route('/')
 def index():
     """Serve the main HTML page"""
@@ -166,7 +217,7 @@ def get_due_tasks():
     """Get tasks that have a due date but no scheduled date (for calendar due-event display)."""
     statuses = [s.strip() for s in request.args.get('status', 'pending').split(',') if s.strip()]
     status_args = _build_task_filter(statuses, None)
-    result = run_task_command(['task', 'due.not:', 'scheduled:'] + status_args + ['export'])
+    result = run_task_command(['task', 'due.any:', 'scheduled.none:'] + status_args + ['export'])
     if result['success']:
         try:
             tasks = json.loads(result['stdout'])
@@ -386,6 +437,9 @@ def modify_task(task_id):
     if 'sched_duration' in data and data['sched_duration']:
         modifications.append(f'sched_duration:{data["sched_duration"]}')
 
+    if 'due_duration' in data and data['due_duration']:
+        modifications.append(f'due_duration:{data["due_duration"]}')
+
     if 'state' in data:
         modifications.append(f'state:{data["state"]}' if data['state'] else 'state:')
 
@@ -460,6 +514,9 @@ def add_task():
     if data.get('sched_duration'):
         args.append(f'sched_duration:{data["sched_duration"]}')
 
+    if data.get('due_duration'):
+        args.append(f'due_duration:{data["due_duration"]}')
+
     create_result = run_task_command(args)
 
     if create_result['success']:
@@ -490,11 +547,26 @@ def sync_status():
     task_dir = Path.home() / '.task'
     if not (task_dir / '.git').exists():
         return jsonify({'changes': 0, 'git': False})
-    result = subprocess.run(
+
+    # Primary: count unpushed commits — gittw commits after each task op so
+    # this accurately reflects "how many task changes since last sync"
+    unpushed_r = subprocess.run(
+        ['git', '-C', str(task_dir), 'rev-list', '@{u}..HEAD', '--count'],
+        capture_output=True, text=True
+    )
+    if unpushed_r.returncode == 0:
+        unpushed = int(unpushed_r.stdout.strip() or '0')
+    else:
+        unpushed = 0  # no upstream configured
+
+    # Secondary: uncommitted working-tree changes (non-gittw workflows)
+    dirty_r = subprocess.run(
         ['git', '-C', str(task_dir), 'status', '--porcelain'],
         capture_output=True, text=True
     )
-    changes = len([l for l in result.stdout.splitlines() if l.strip()])
+    uncommitted = len([l for l in dirty_r.stdout.splitlines() if l.strip()])
+
+    changes = unpushed + uncommitted
     return jsonify({'changes': changes, 'git': True})
 
 @app.route('/api/sync/info')
@@ -523,6 +595,51 @@ def sync_tasks():
         'warnings': _warnings(result)
     })
 
+@app.route('/api/events')
+def sse_stream():
+    """Server-Sent Events stream — delivers hook prompts to the browser."""
+    def generate():
+        q: Queue = Queue()
+        client_id = id(q)
+        with _sse_lock:
+            _sse_clients[client_id] = q
+        try:
+            # Replay any prompt files already waiting (e.g. page reload mid-prompt)
+            for pf in sorted(_PROMPT_DIR.glob('*.prompt')):
+                if not (_PROMPT_DIR / (pf.stem + '.answer')).exists():
+                    try:
+                        yield f"data: {json.dumps(json.loads(pf.read_text()))}\n\n"
+                    except Exception:
+                        pass
+            while True:
+                try:
+                    yield q.get(timeout=20)
+                except Empty:
+                    yield ': ka\n\n'   # keepalive — prevents proxy timeouts
+        finally:
+            with _sse_lock:
+                _sse_clients.pop(client_id, None)
+
+    return Response(generate(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
+@app.route('/api/hook-answer', methods=['POST'])
+def hook_answer():
+    """Receive the user's answer to a hook prompt and write it for the hook to read."""
+    data = request.get_json(silent=True) or {}
+    prompt_id = data.get('id', '')
+    answer    = data.get('answer', 'no')
+    if not prompt_id or '/' in prompt_id or '..' in prompt_id:
+        return jsonify({'ok': False, 'error': 'invalid id'}), 400
+    answer_file = _PROMPT_DIR / f'{prompt_id}.answer'
+    prompt_file = _PROMPT_DIR / f'{prompt_id}.prompt'
+    answer_file.write_text(json.dumps({'answer': answer}))
+    # Clean up the prompt file so the watcher stops re-broadcasting it
+    prompt_file.unlink(missing_ok=True)
+    return jsonify({'ok': True})
+
+
 if __name__ == '__main__':
     check_result = run_task_command(['task', 'version'])
     if not check_result['success']:
@@ -533,4 +650,4 @@ if __name__ == '__main__':
 
     print("Starting TaskWarrior Web UI...")
     print("Access the interface at: http://localhost:5000")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

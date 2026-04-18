@@ -129,9 +129,10 @@ class TaskCardManager {
                        : ['3','4','M'].includes(pri) ? 'pri-med'
                        : ['5','6','L'].includes(pri) ? 'pri-low' : '';
 
-        const proj    = task.project ? `<span class="card-proj">${this._e(task.project)}</span>` : '';
-        const dueHtml = this._due(task.due);
-        const durHtml = task.estTime ? `<span class="card-dur">⏱ ${this._fmtDur(this._parseDur(task.estTime))}</span>` : '';
+        const proj     = task.project ? `<span class="card-proj">${this._e(task.project)}</span>` : '';
+        const dueHtml  = this._due(task.due);
+        const schedHtml = this._sched(task.scheduled);
+        const durHtml  = task.sched_duration ? `<span class="card-dur">⏱ ${this._fmtDur(this._parseDur(task.sched_duration))}</span>` : '';
         const tagsHtml = tags.map(t => `<span class="card-tag">+${this._e(t)}</span>`).join('');
 
         const anns = task.annotations || [];
@@ -141,16 +142,20 @@ class TaskCardManager {
 
         const card = document.createElement('div');
         card.className = 'task-card';
+        if (active) card.classList.add('task-started');
         card.dataset.taskId   = task.uuid;
         card.dataset.taskData = JSON.stringify(task);
         if (pri) card.dataset.pri = pri;
+        if      (task.scheduled && task.due) card.dataset.type = 'both';
+        else if (task.scheduled)             card.dataset.type = 'scheduled';
+        else if (task.due)                   card.dataset.type = 'due';
 
         card.innerHTML =
             `<div class="card-main">` +
                 `<div class="card-desc">${this._e(task.description)}</div>` +
                 `<div class="card-meta">` +
                     (pri ? `<span class="card-pri ${priClass}">${pri}</span>` : '') +
-                    proj + dueHtml + durHtml + tagsHtml +
+                    proj + dueHtml + schedHtml + durHtml + tagsHtml +
                 `</div>` +
                 annHtml +
             `</div>` +
@@ -174,6 +179,14 @@ class TaskCardManager {
         const cls  = days < 0 ? 'overdue' : days < 3 ? 'due-soon' : '';
         const lbl  = d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
         return `<span class="card-due ${cls}">${lbl}</span>`;
+    }
+
+    _sched(scheduled) {
+        if (!scheduled) return '';
+        const m = scheduled.match(/^(\d{4})(\d{2})(\d{2})/);
+        if (!m) return '';
+        const lbl = new Date(+m[1], +m[2]-1, +m[3]).toLocaleDateString(undefined, {month:'short', day:'numeric'});
+        return `<span class="card-sched">${lbl}</span>`;
     }
 
     _parseDur(s) {

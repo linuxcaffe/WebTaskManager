@@ -8,10 +8,8 @@
     <link rel="apple-touch-icon" href="/logo-192.png">
     <title>Calendar Planner</title>
 
-    <!-- Toast UI Calendar CSS - The order is important ! -->
-    <link rel="stylesheet" href="https://uicdn.toast.com/tui.time-picker/latest/tui-time-picker.css" />
-    <link rel="stylesheet" href="https://uicdn.toast.com/tui.date-picker/latest/tui-date-picker.css" />
-    <link rel="stylesheet" href="https://uicdn.toast.com/calendar/v2.1.3/toastui-calendar.min.css" />
+    <!-- FullCalendar v5 (local — avoids PWA sandbox CDN issues) -->
+    <link rel="stylesheet" href="/fullcalendar.min.css">
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css">
@@ -20,6 +18,9 @@
     <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
 </head>
 <body class="cal-page">
+    <!-- DEBUG banner — remove once calendar is working -->
+    <div id="cal-debug-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;padding:8px 12px;font-size:12px;white-space:pre-wrap;word-break:break-all;max-height:30vh;overflow-y:auto;pointer-events:none;"></div>
+
     <div class="app-container">
         <div class="cal-topbar">
             <button id="prev-btn" class="nav-btn">◀</button>
@@ -71,18 +72,19 @@
                 <h3 id="modal-task-title">Task Details</h3>
                 <button class="modal-close" id="modal-close-btn">&times;</button>
             </div>
-            <div class="modal-body" id="modal-task-body">
-                <!-- Dynamic content -->
-            </div>
-            <div class="modal-footer">
-                <button id="modal-unschedule-btn" class="btn btn-warning">Unschedule</button>
-                <button id="modal-done-btn" class="btn btn-success">Done</button>
-                <button id="modal-cancel-btn" class="btn btn-secondary">Close</button>
+            <div class="modal-body" id="modal-task-body"></div>
+            <div class="modal-footer modal-crud-footer">
+                <button id="modal-start-btn"       class="ca-btn ca-start"  title="Start">▶</button>
+                <button id="modal-stop-btn"        class="ca-btn ca-stop"   title="Stop">⏸</button>
+                <button id="modal-edit-btn"        class="ca-btn ca-edit"   title="Edit">✏</button>
+                <button id="modal-unschedule-btn"  class="ca-btn ca-unsched" title="Unschedule">📅</button>
+                <button id="modal-done-btn"        class="ca-btn ca-done"   title="Done">✓</button>
+                <button id="modal-delete-btn"      class="ca-btn ca-delete" title="Delete">✕</button>
             </div>
         </div>
     </div>
 
-    <!-- Sync dialog (identical to index.html) -->
+    <!-- Sync dialog -->
     <div id="sync-dialog" class="sync-dialog-backdrop" style="display:none">
         <div class="sync-dialog">
             <div class="sync-dialog-header">
@@ -97,16 +99,17 @@
         </div>
     </div>
 
-    <!-- Notification (same element as index.html so styles.css rules apply) -->
+    <!-- Notification -->
     <div id="notification" class="notification">
         <span id="notif-text"></span>
         <button class="notif-close" id="notif-close">&times;</button>
     </div>
 
-    <!-- Toast UI Calendar JS - The order is important-->
-    <script src="https://uicdn.toast.com/tui.time-picker/latest/tui-time-picker.js"></script>
-    <script src="https://uicdn.toast.com/tui.date-picker/latest/tui-date-picker.js"></script>
-    <script src="https://uicdn.toast.com/calendar/v2.1.3/toastui-calendar.min.js"></script>
+    <!-- FullCalendar v5: core + view plugins (local — avoids PWA sandbox CDN issues) -->
+    <script src="/fullcalendar.min.js"></script>
+    <script src="/fullcalendar-daygrid.min.js"></script>
+    <script src="/fullcalendar-timegrid.min.js"></script>
+    <script src="/fullcalendar-interaction.min.js"></script>
     <!-- Custom JS -->
     <script src="task-card.js"></script>
     <script src="task-editor.js"></script>

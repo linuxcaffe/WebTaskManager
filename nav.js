@@ -29,7 +29,7 @@
     const PAGES = [
         { id: 'tasks',    href: '/',                      label: 'List'       },
         { id: 'kanban',   href: '/kanban.html',           label: 'Kanban'     },
-        { id: 'planner',  href: '/day-planner.html',      label: 'Day Planner'},
+        { id: 'agenda',   href: '/agenda.html',            label: 'Agenda'     },
         { id: 'calendar', href: '/calendar-planner.html', label: 'Calendar'   },
     ];
 
@@ -79,7 +79,7 @@
     function activePage() {
         const p = window.location.pathname;
         if (p.endsWith('kanban.html'))           return 'kanban';
-        if (p.endsWith('day-planner.html'))      return 'planner';
+        if (p.endsWith('agenda.html'))           return 'agenda';
         if (p.endsWith('calendar-planner.html')) return 'calendar';
         return 'tasks';
     }
@@ -197,6 +197,46 @@
 #tw-filter-bar.active { display: flex; }
 .tw-fbar-item strong { color: rgba(255,255,255,0.65); font-weight: 500; }
 .tw-fbar-sep { color: rgba(255,255,255,0.2); }
+
+/* hook prompt dialog */
+#tw-prompt-backdrop {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,0.5); z-index:20001;
+    align-items:center; justify-content:center;
+}
+#tw-prompt-backdrop.open { display:flex; }
+#tw-prompt-dialog {
+    background:#2c3e50; color:#ecf0f1;
+    border-radius:8px; width:min(360px,92vw);
+    box-shadow:0 8px 32px rgba(0,0,0,0.4);
+    overflow:hidden;
+}
+#tw-prompt-header {
+    padding:14px 16px 10px;
+    border-bottom:1px solid rgba(255,255,255,0.1);
+    font-size:1rem; font-weight:600;
+    display:flex; align-items:center; gap:8px;
+}
+#tw-prompt-header .tw-prompt-icon { font-size:1.2rem; }
+#tw-prompt-body { padding:14px 16px; }
+#tw-prompt-question { font-size:0.95rem; margin-bottom:6px; }
+#tw-prompt-context  { font-size:0.78rem; color:rgba(255,255,255,0.45); margin-bottom:14px; min-height:0; }
+#tw-prompt-timer {
+    height:3px; background:rgba(255,255,255,0.12); border-radius:2px; margin-bottom:14px;
+}
+#tw-prompt-timer-bar {
+    height:100%; background:#3498db; border-radius:2px;
+    transition:width 1s linear;
+}
+#tw-prompt-actions { display:flex; gap:8px; justify-content:flex-end; }
+.tw-prompt-btn {
+    padding:7px 20px; border:none; border-radius:5px;
+    font-size:0.88rem; font-weight:600; cursor:pointer;
+}
+.tw-prompt-btn-yes  { background:#3498db; color:#fff; }
+.tw-prompt-btn-yes:hover  { background:#2980b9; }
+.tw-prompt-btn-no   { background:rgba(255,255,255,0.1); color:#ecf0f1; }
+.tw-prompt-btn-no:hover   { background:rgba(255,255,255,0.18); }
 
 /* side menu */
 #tw-side-menu {
@@ -521,9 +561,104 @@
         return { names: [], filters: {} };
     }
 
+    // ── Hook prompt system ────────────────────────────────────────────────────
+    const _promptQueue = [];
+    let   _promptActive = false;
+
+    function _buildPromptUI() {
+        if (document.getElementById('tw-prompt-backdrop')) return;
+        const el = document.createElement('div');
+        el.innerHTML =
+            `<div id="tw-prompt-backdrop">` +
+              `<div id="tw-prompt-dialog">` +
+                `<div id="tw-prompt-header"><span class="tw-prompt-icon">❓</span><span id="tw-prompt-title">Hook Prompt</span></div>` +
+                `<div id="tw-prompt-body">` +
+                  `<div id="tw-prompt-question"></div>` +
+                  `<div id="tw-prompt-context"></div>` +
+                  `<div id="tw-prompt-timer"><div id="tw-prompt-timer-bar" style="width:100%"></div></div>` +
+                  `<div id="tw-prompt-actions">` +
+                    `<button class="tw-prompt-btn tw-prompt-btn-no"  id="tw-prompt-no">No</button>` +
+                    `<button class="tw-prompt-btn tw-prompt-btn-yes" id="tw-prompt-yes">Yes</button>` +
+                  `</div>` +
+                `</div>` +
+              `</div>` +
+            `</div>`;
+        document.body.appendChild(el.firstChild);
+    }
+
+    function _showNextPrompt() {
+        if (_promptActive || _promptQueue.length === 0) return;
+        const prompt = _promptQueue.shift();
+        _promptActive = true;
+        _buildPromptUI();
+
+        document.getElementById('tw-prompt-question').textContent = prompt.question || '';
+        const ctx = document.getElementById('tw-prompt-context');
+        ctx.textContent = prompt.context || '';
+        ctx.style.display = prompt.context ? '' : 'none';
+
+        const isDefaultYes = (prompt.default || 'no') === 'yes';
+        const yesBtn = document.getElementById('tw-prompt-yes');
+        const noBtn  = document.getElementById('tw-prompt-no');
+        yesBtn.style.order = isDefaultYes ? '2' : '1';
+        noBtn.style.order  = isDefaultYes ? '1' : '2';
+
+        document.getElementById('tw-prompt-backdrop').classList.add('open');
+
+        // Countdown timer
+        const timeout = (prompt.timeout || 30);
+        const bar = document.getElementById('tw-prompt-timer-bar');
+        bar.style.transition = 'none';
+        bar.style.width = '100%';
+        requestAnimationFrame(() => {
+            bar.style.transition = `width ${timeout}s linear`;
+            bar.style.width = '0%';
+        });
+
+        let answered = false;
+        const timer = setTimeout(() => answer(prompt.default || 'no'), timeout * 1000);
+
+        function answer(val) {
+            if (answered) return;
+            answered = true;
+            clearTimeout(timer);
+            document.getElementById('tw-prompt-backdrop').classList.remove('open');
+            fetch('/api/hook-answer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: prompt.id, answer: val })
+            }).catch(() => {});
+            _promptActive = false;
+            _showNextPrompt();
+        }
+
+        yesBtn.onclick = () => answer('yes');
+        noBtn.onclick  = () => answer('no');
+    }
+
+    function _initSSE() {
+        const es = new EventSource('/api/events');
+        es.onmessage = (e) => {
+            try {
+                const msg = JSON.parse(e.data);
+                if (msg.type === 'confirm') {
+                    _promptQueue.push(msg);
+                    _showNextPrompt();
+                } else if (msg.type === 'info') {
+                    document.dispatchEvent(new CustomEvent('tw-show-notification',
+                        { detail: { message: msg.question, type: 'info' } }));
+                }
+            } catch (_) {}
+        };
+        es.onerror = () => {
+            // Browser auto-reconnects — no action needed
+        };
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', () => { init(); _initSSE(); });
     } else {
         init();
+        _initSSE();
     }
 }());

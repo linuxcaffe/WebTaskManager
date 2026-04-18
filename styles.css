@@ -320,7 +320,8 @@ h2 {
     align-items: stretch;
     background: #fff;
     border: 1px solid #e8e8e8;
-    border-left: 3px solid transparent;
+    border-left:  3px solid transparent;   /* due/sched type — matches calendar colors */
+    border-right: 3px solid transparent;   /* priority */
     border-radius: 6px;
     margin-bottom: 7px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
@@ -328,10 +329,17 @@ h2 {
     overflow: hidden;
 }
 .task-card:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
+.task-card.task-started { background-color: #fffde7; border-color: #f9a825; }
 
-.task-card[data-pri="1"], .task-card[data-pri="2"] { border-left-color: #e74c3c; }
-.task-card[data-pri="3"], .task-card[data-pri="4"] { border-left-color: #f39c12; }
-.task-card[data-pri="5"], .task-card[data-pri="6"] { border-left-color: #27ae60; }
+/* Right border — priority (bookends the left type indicator) */
+.task-card[data-pri="1"], .task-card[data-pri="2"] { border-right-color: #e74c3c; }
+.task-card[data-pri="3"], .task-card[data-pri="4"] { border-right-color: #f39c12; }
+.task-card[data-pri="5"], .task-card[data-pri="6"] { border-right-color: #27ae60; }
+
+/* Left border — due/scheduled type, colours match calendar event palette */
+.task-card[data-type="due"]       { border-left-color: #e74c3c; }   /* calendar 'due' red */
+.task-card[data-type="scheduled"] { border-left-color: #4a90e2; }   /* calendar 'scheduled' blue */
+.task-card[data-type="both"]      { border-left-color: #4a90e2; }   /* scheduled takes precedence */
 
 .card-main {
     flex: 1;
@@ -363,6 +371,7 @@ h2 {
 .card-due  { font-size: 0.78em; color: #888; }
 .card-due.overdue  { color: #b71c1c; font-weight: 600; }
 .card-due.due-soon { color: #e65100; }
+.card-sched { font-size: 0.78em; color: #4a90e2; }
 .card-dur  { font-size: 0.78em; color: #999; }
 .card-tag  { font-size: 0.75em; color: #555; background: #f5f5f5; padding: 1px 5px; border-radius: 8px; }
 
@@ -402,25 +411,53 @@ h2 {
 .ca-stop:hover       { color: #e67e22; }
 .ca-done:hover       { color: #27ae60; }
 .ca-delete:hover     { color: #e74c3c; }
+.ca-unsched:hover    { color: #e67e22; }
+
+/* Calendar event detail modal — CRUD footer */
+.modal-crud-footer {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 10px 16px 14px;
+    border-top: 1px solid var(--border-color);
+}
+.modal-crud-footer .ca-btn {
+    font-size: 1.2rem;
+    padding: 8px 14px;
+    border-radius: 6px;
+    color: #888;
+}
 
 /* ── List view ───────────────────────────────────────────────── */
 :is(#tasks-container, #unplanned-tasks).list-view .task-card {
     margin-bottom: 2px;
     border-radius: 3px;
+    padding: 0;
     cursor: pointer;
 }
 :is(#tasks-container, #unplanned-tasks).list-view .card-main {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 4px 10px;
+    flex-wrap: wrap;          /* meta wraps below desc when there's no room */
+    align-items: baseline;
+    gap: 0 8px;
+    padding: 3px 8px;
 }
 :is(#tasks-container, #unplanned-tasks).list-view .card-desc {
+    /* Description wins: takes all available width, truncates rather than wraps */
+    flex: 1 1 0;
+    min-width: min(160px, 100%);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     margin-bottom: 0;
-    flex: 1;
+    font-size: 0.88rem;
+}
+:is(#tasks-container, #unplanned-tasks).list-view .card-meta {
+    flex: 0 0 auto;           /* meta never squeezes desc; wraps to next line if needed */
+    white-space: nowrap;
+    gap: 4px;
 }
 :is(#tasks-container, #unplanned-tasks).list-view .card-meta .card-pri,
-:is(#tasks-container, #unplanned-tasks).list-view .card-meta .card-due,
 :is(#tasks-container, #unplanned-tasks).list-view .card-meta .card-dur { display: none; }
 :is(#tasks-container, #unplanned-tasks).list-view .card-actions { display: none; }
 :is(#tasks-container, #unplanned-tasks).list-view .task-card:not(.expanded) .card-annotations { display: none; }
@@ -446,7 +483,6 @@ h2 {
     text-overflow: ellipsis;
 }
 :is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-meta .card-pri,
-:is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-meta .card-due,
 :is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-meta .card-dur { display: none; }
 :is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-actions { display: none; }
 :is(#tasks-container, #unplanned-tasks):not(.list-view) .task-card.collapsed .card-annotations { display: none; }
@@ -529,6 +565,124 @@ h2 {
     justify-content: flex-end;
     margin-top: 20px;
 }
+
+/* ── Task Editor — styled to match Sync dialog ── */
+.task-editor-modal {
+    z-index: 10001;
+    background: rgba(0,0,0,0.5);
+    /* centred — overrides .modal which uses top:0/left:0/width/height */
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+/* show() sets display:block; override that back to flex so centering works */
+.task-editor-modal[style*="display: block"],
+.task-editor-modal[style*="display:block"] {
+    display: flex !important;
+}
+.task-editor-modal .te-panel {
+    background: #2c3e50;
+    color: #ecf0f1;
+    border-radius: 8px;
+    width: min(380px, 92vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.te-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    font-size: 1rem;
+    font-weight: 600;
+}
+.te-header .close {
+    background: none; border: none;
+    color: #aaa; font-size: 1.25rem;
+    line-height: 1; padding: 0 4px; cursor: pointer;
+}
+.te-header .close:hover { color: #fff; }
+
+#task-editor-form {
+    padding: 14px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+#task-editor-form input[type="text"],
+#task-editor-form input[type="datetime-local"],
+#task-editor-form select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 5px;
+    font-size: 0.85rem;
+    box-sizing: border-box;
+    background: rgba(255,255,255,0.08);
+    color: #ecf0f1;
+    color-scheme: dark;
+}
+#task-editor-form input::placeholder { color: rgba(255,255,255,0.35); }
+#task-editor-form input:focus,
+#task-editor-form select:focus {
+    border-color: #3498db;
+    outline: none;
+    background: rgba(255,255,255,0.12);
+}
+#task-editor-form select option { background: #2c3e50; color: #ecf0f1; }
+
+.te-row {
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+}
+.te-row > * { flex: 1; min-width: 0; }
+.te-row-7-3 > :first-child { flex: 7; }
+.te-row-7-3 > :last-child  { flex: 3; }
+.te-row-1-3 > :first-child { flex: 1; }
+.te-row-1-3 > :last-child  { flex: 3; }
+
+.te-date-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+.te-date-field small {
+    font-size: 0.68rem;
+    color: rgba(255,255,255,0.4);
+    padding-left: 2px;
+    line-height: 1;
+    user-select: none;
+}
+.te-date-row { display: flex; align-items: center; gap: 2px; }
+.te-date-row input { flex: 1; min-width: 0; }
+.te-clr {
+    background: none; border: none;
+    color: rgba(255,255,255,0.3);
+    font-size: 1rem; line-height: 1;
+    padding: 0 4px; cursor: pointer; flex-shrink: 0; border-radius: 3px;
+}
+.te-clr:hover { color: #e74c3c; background: rgba(231,76,60,0.15); }
+
+.te-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+.btn-sm { padding: 6px 18px !important; font-size: 0.85rem !important; }
+.task-editor-modal .btn-primary   { background: #3498db !important; color: #fff !important; border: none !important; }
+.task-editor-modal .btn-primary:hover { background: #2980b9 !important; }
+.task-editor-modal .btn-secondary { background: rgba(255,255,255,0.1) !important; color: #ecf0f1 !important; border: none !important; }
+.task-editor-modal .btn-secondary:hover { background: rgba(255,255,255,0.18) !important; }
 
 /* Loading and Error States */
 .loading {
@@ -657,4 +811,32 @@ h2 {
         width: 100%;
         justify-content: center;
     }
+}
+
+/* ── Agenda page ─────────────────────────────────────────────────────────── */
+.agenda-date-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text-muted, #888);
+    padding: 0.9rem 0 0.3rem;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    margin-bottom: 0.5rem;
+}
+.agenda-date-header.overdue {
+    color: #dc3545;
+}
+.agenda-date-header.today {
+    background: #4a90e2;
+    color: #fff;
+    border-bottom: none;
+    border-radius: 4px;
+    padding: 0.4rem 0.75rem;
+    margin-bottom: 0.75rem;
+    letter-spacing: 0.08em;
+}
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted, #888);
 }
